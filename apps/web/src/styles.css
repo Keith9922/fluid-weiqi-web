@@ -1,0 +1,267 @@
+:root {
+	color-scheme: dark;
+	--bg: #1a1612;
+	--panel: #2a2520;
+	--panel-2: #3a3530;
+	--ink: #ece2d4;
+	--muted: #8b8275;
+	--accent: #d4a85f;
+	--p1: #d65a50;
+	--p2: #4a8ec0;
+	--danger: #c25149;
+	font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC",
+		"Helvetica Neue", Arial, "Microsoft YaHei", sans-serif;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--ink);
+	min-height: 100vh;
+}
+
+#root {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+.app-header {
+	padding: 1rem 1.5rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	border-bottom: 1px solid #3a3530;
+}
+
+.app-header h1 {
+	margin: 0;
+	font-size: 1.1rem;
+	font-weight: 500;
+	letter-spacing: 0.05em;
+}
+
+.app-header .meta {
+	font-size: 0.8rem;
+	color: var(--muted);
+}
+
+.app-header a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+.app-header a:hover {
+	text-decoration: underline;
+}
+
+.app-main {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2rem 1rem;
+}
+
+.lobby {
+	background: var(--panel);
+	border: 1px solid #3a3530;
+	border-radius: 12px;
+	padding: 2rem;
+	width: min(440px, 92vw);
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.lobby h2 {
+	margin: 0 0 0.25rem;
+	font-size: 1.3rem;
+}
+
+.lobby p {
+	margin: 0;
+	color: var(--muted);
+	font-size: 0.9rem;
+	line-height: 1.5;
+}
+
+.lobby .field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+
+.lobby label {
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+
+.lobby input {
+	background: var(--bg);
+	border: 1px solid #3a3530;
+	border-radius: 6px;
+	padding: 0.55rem 0.7rem;
+	color: var(--ink);
+	font-size: 0.95rem;
+	font-family: inherit;
+}
+
+.lobby input:focus {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+
+.lobby .row {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.lobby .row > * {
+	flex: 1;
+}
+
+.btn {
+	background: var(--accent);
+	color: #1a1612;
+	border: none;
+	border-radius: 6px;
+	padding: 0.6rem 0.9rem;
+	font-size: 0.95rem;
+	font-weight: 500;
+	cursor: pointer;
+	font-family: inherit;
+}
+
+.btn:hover {
+	filter: brightness(1.08);
+}
+
+.btn:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.btn.secondary {
+	background: var(--panel-2);
+	color: var(--ink);
+}
+
+.btn.danger {
+	background: var(--danger);
+	color: white;
+}
+
+.error {
+	color: var(--danger);
+	background: #2a1612;
+	border: 1px solid #4a2620;
+	border-radius: 6px;
+	padding: 0.5rem 0.7rem;
+	font-size: 0.9rem;
+}
+
+.game {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1rem;
+	width: 100%;
+}
+
+.game-board {
+	position: relative;
+	display: inline-block;
+	box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+	border-radius: 8px;
+	overflow: hidden;
+	background: #28221c;
+}
+
+.game-board canvas {
+	display: block;
+	cursor: crosshair;
+}
+
+.game-board canvas.preview {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.game-board canvas.input {
+	position: absolute;
+	inset: 0;
+	background: transparent;
+}
+
+.game-info {
+	display: flex;
+	gap: 1rem;
+	align-items: center;
+	flex-wrap: wrap;
+	justify-content: center;
+	font-size: 0.95rem;
+}
+
+.player-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.35rem 0.7rem;
+	border-radius: 999px;
+	background: var(--panel);
+}
+
+.player-chip.active {
+	outline: 2px solid var(--accent);
+}
+
+.player-chip .dot {
+	width: 0.7em;
+	height: 0.7em;
+	border-radius: 50%;
+}
+
+.player-chip[data-player="0"] .dot {
+	background: var(--p1);
+}
+
+.player-chip[data-player="1"] .dot {
+	background: var(--p2);
+}
+
+.game-controls {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+}
+
+.muted {
+	color: var(--muted);
+}
+
+.shrug {
+	color: var(--muted);
+	font-size: 0.85rem;
+}
+
+kbd {
+	background: var(--panel-2);
+	padding: 0.05em 0.4em;
+	border-radius: 3px;
+	font-size: 0.8em;
+	font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.banner {
+	background: var(--panel);
+	border: 1px solid var(--accent);
+	border-radius: 8px;
+	padding: 0.7rem 1rem;
+	font-size: 0.95rem;
+}

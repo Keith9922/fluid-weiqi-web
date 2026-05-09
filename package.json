@@ -1,0 +1,13 @@
+{
+  "name": "fluid-weiqi-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Web port of Fluid Weiqi (continuous-influence-field Go variant). Original game by @WangNianyi2001.",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" run dev",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "packageManager": "pnpm@10.16.1"
+}
