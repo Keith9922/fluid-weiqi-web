@@ -57,6 +57,13 @@ export class WsClient {
 }
 
 export function defaultWsUrl(): string {
+	// Production: VITE_WS_URL is baked into the build via Vercel env.
+	const configured = import.meta.env.VITE_WS_URL as string | undefined;
+	if (configured && configured.length > 0) {
+		// If the configured value omits the path, append /ws.
+		return /^(wss?:\/\/[^/]+)$/.test(configured) ? `${configured}/ws` : configured;
+	}
+	// Dev: same-origin, proxied by Vite to the local server.
 	const proto = location.protocol === "https:" ? "wss" : "ws";
 	return `${proto}://${location.host}/ws`;
 }
