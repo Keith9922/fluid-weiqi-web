@@ -1,8 +1,17 @@
 // Game screen — renders the board, handles input, displays player/turn UI.
+// Uses the new BoardRenderer (WebGL fluid + Canvas2D overlay).
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { MatchActionRequest, MatchSnapshot, RoomPlayerInfo, Vec2 } from "@fluid/core";
-import { layout, render, setupCanvases } from "./render.ts";
+import { useEffect, useRef, useState } from "react";
+import {
+	type AiLevel,
+	type GameConfig,
+	type MatchActionRequest,
+	type MatchSnapshot,
+	type RoomPlayerInfo,
+	type Vec2,
+} from "@fluid/core";
+import { AI_LABELS } from "@fluid/core";
+import { BoardRenderer, PLAYER_STYLES } from "./render.ts";
 
 export type GameProps = {
 	roomCode: string;
@@ -10,7 +19,9 @@ export type GameProps = {
 	players: RoomPlayerInfo[];
 	snapshot: MatchSnapshot;
 	matchStarted: boolean;
+	gameConfig: GameConfig;
 	rejection: string | null;
+	aiThinking: boolean;
 	onAction: (req: MatchActionRequest) => void;
 	onLeave: () => void;
 };
@@ -18,56 +29,59 @@ export type GameProps = {
 const BOARD_PX = 640;
 
 export function Game(props: GameProps) {
-	const { snapshot, myPlayerIndex, matchStarted, players, rejection, onAction, onLeave, roomCode } = props;
+	const {
+		snapshot, myPlayerIndex, matchStarted, players, gameConfig,
+		rejection, aiThinking, onAction, onLeave, roomCode,
+	} = props;
 	const board = snapshot.board;
 	const flow = snapshot.flow;
 
-	const baseRef = useRef<HTMLCanvasElement | null>(null);
+	const fluidRef = useRef<HTMLCanvasElement | null>(null);
+	const overlayRef = useRef<HTMLCanvasElement | null>(null);
 	const previewRef = useRef<HTMLCanvasElement | null>(null);
 	const inputRef = useRef<HTMLCanvasElement | null>(null);
+	const rendererRef = useRef<BoardRenderer | null>(null);
 
 	const [hover, setHover] = useState<Vec2 | null>(null);
 	const [shiftHeld, setShiftHeld] = useState(false);
 	const myTurn = matchStarted && !flow.isEnded && flow.currentPlayerIndex === myPlayerIndex;
 
-	// Init canvases on mount.
 	useEffect(() => {
-		if (!baseRef.current || !previewRef.current) return;
-		setupCanvases(baseRef.current, previewRef.current, BOARD_PX);
+		if (!fluidRef.current || !overlayRef.current || !previewRef.current) return;
+		try {
+			const r = new BoardRenderer(
+				{ fluid: fluidRef.current, overlay: overlayRef.current, preview: previewRef.current },
+				BOARD_PX,
+			);
+			rendererRef.current = r;
+			r.setBoard(board);
+		} catch (err) {
+			console.error("Failed to init BoardRenderer:", err);
+		}
+		return () => {
+			rendererRef.current?.dispose();
+			rendererRef.current = null;
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	// Re-render base whenever the board changes.
+	// Re-render when board changes.
 	useEffect(() => {
-		if (!baseRef.current || !previewRef.current) return;
-		render({
-			canvas: baseRef.current,
-			previewCanvas: previewRef.current,
-			board,
-			pixelSize: BOARD_PX,
-			hover: null,
-			hoverPlayer: null,
-			hoverValid: true,
-			currentPlayerIndex: flow.currentPlayerIndex,
-		});
-	}, [board, flow.currentPlayerIndex]);
+		rendererRef.current?.setBoard(board);
+	}, [board]);
 
-	// Re-render preview when hover/turn changes.
+	// Re-render hover preview.
 	useEffect(() => {
-		if (!baseRef.current || !previewRef.current) return;
-		const canPreview = myTurn && hover !== null && inBounds(hover, board);
-		render({
-			canvas: baseRef.current,
-			previewCanvas: previewRef.current,
-			board,
-			pixelSize: BOARD_PX,
-			hover: canPreview ? hover : null,
-			hoverPlayer: myPlayerIndex,
-			hoverValid: canPreview,
-			currentPlayerIndex: flow.currentPlayerIndex,
-		});
-	}, [hover, myTurn, board, myPlayerIndex, flow.currentPlayerIndex]);
+		const r = rendererRef.current;
+		if (!r) return;
+		if (!myTurn || !hover || !inBounds(hover, board)) {
+			r.setHover(null, myPlayerIndex, true);
+			return;
+		}
+		r.setHover(hover, myPlayerIndex, true);
+	}, [hover, myTurn, board, myPlayerIndex]);
 
-	// Track Shift key for free placement.
+	// Track Shift for free placement.
 	useEffect(() => {
 		const onDown = (e: KeyboardEvent) => { if (e.key === "Shift") setShiftHeld(true); };
 		const onUp = (e: KeyboardEvent) => { if (e.key === "Shift") setShiftHeld(false); };
@@ -79,13 +93,13 @@ export function Game(props: GameProps) {
 		};
 	}, []);
 
-	const lay = useMemo(() => layout(BOARD_PX, board), [board]);
-
 	function eventToBoardPoint(e: React.MouseEvent<HTMLCanvasElement>): Vec2 | null {
+		const r = rendererRef.current;
+		if (!r) return null;
 		const rect = e.currentTarget.getBoundingClientRect();
 		const px = ((e.clientX - rect.left) / rect.width) * BOARD_PX;
 		const py = ((e.clientY - rect.top) / rect.height) * BOARD_PX;
-		return lay.pxToBoard({ x: px, y: py });
+		return r.pxToBoard({ x: px, y: py });
 	}
 
 	function snapPoint(p: Vec2): Vec2 {
@@ -108,7 +122,6 @@ export function Game(props: GameProps) {
 		if (!raw) return;
 		const point = snapPoint(raw);
 		if (!inBounds(point, board)) return;
-
 		onAction({
 			playerIndex: myPlayerIndex,
 			actionType: "place",
@@ -128,66 +141,144 @@ export function Game(props: GameProps) {
 		});
 	};
 
+	const stoneCounts = [
+		board.stones.filter(s => s.playerIndex === 0).length,
+		board.stones.filter(s => s.playerIndex === 1).length,
+	];
+
 	return (
 		<div className="game">
-			<div className="game-info">
-				<span className="muted">房间</span>
-				<strong style={{ letterSpacing: "0.15em", fontSize: "1.05rem" }}>{roomCode}</strong>
+			<div className="game-rail">
+				<RoomBadge code={roomCode} />
 				{players.map((p, i) => (
-					<span
+					<PlayerCard
 						key={i}
-						className={`player-chip${flow.currentPlayerIndex === i && matchStarted && !flow.isEnded ? " active" : ""}`}
-						data-player={i}
-					>
-						<span className="dot" />
-						{p.connected ? p.name : "(待加入)"}
-						{i === myPlayerIndex && <span className="muted"> · 你</span>}
-					</span>
+						player={p}
+						isMe={i === myPlayerIndex}
+						isCurrent={flow.currentPlayerIndex === i && matchStarted && !flow.isEnded}
+						stoneCount={stoneCounts[i] ?? 0}
+						aiThinking={aiThinking && p.isAi && flow.currentPlayerIndex === i}
+					/>
 				))}
+				<GameMeta config={gameConfig} matchStarted={matchStarted} flow={flow} myPlayerIndex={myPlayerIndex} />
 			</div>
 
-			{!matchStarted && (
-				<div className="banner">
-					等另一个玩家加入：把房间码 <kbd>{roomCode}</kbd> 发给对手，或在新标签页打开本站点击"加入"。
+			<div className="game-stage">
+				{!matchStarted && !players.some(p => p.isAi) && (
+					<div className="banner banner-info">
+						等另一位玩家加入。把房间码 <kbd>{roomCode}</kbd> 发给对手。
+					</div>
+				)}
+
+				{flow.isEnded && (
+					<div className="banner banner-end">
+						{flow.winnerIndex === null
+							? "对局结束 · 平局"
+							: `${players[flow.winnerIndex]?.name ?? `Player ${flow.winnerIndex + 1}`} 胜！`}
+					</div>
+				)}
+
+				{rejection && <div className="banner banner-error">{rejection}</div>}
+
+				<div className="game-board" style={{ width: BOARD_PX, height: BOARD_PX }}>
+					<canvas ref={fluidRef} className="fluid" />
+					<canvas ref={overlayRef} className="overlay" />
+					<canvas ref={previewRef} className="preview" />
+					<canvas
+						ref={inputRef}
+						className="input"
+						width={BOARD_PX}
+						height={BOARD_PX}
+						style={{ width: BOARD_PX, height: BOARD_PX }}
+						onMouseMove={handleMove}
+						onMouseLeave={handleLeave}
+						onClick={handleClick}
+					/>
 				</div>
-			)}
 
-			{flow.isEnded && (
-				<div className="banner">
-					{flow.winnerIndex === null
-						? "对局结束 · 平局"
-						: `对局结束 · ${players[flow.winnerIndex]?.name ?? `Player ${flow.winnerIndex + 1}`} 胜`}
+				<div className="game-controls">
+					<button className="btn secondary" onClick={handlePass} disabled={!myTurn}>
+						Pass · 跳过
+					</button>
+					<button className="btn ghost" onClick={onLeave}>
+						离开房间
+					</button>
+					<span className="game-controls-hint">
+						左键落子（吸附） · 按住 <kbd>Shift</kbd> 自由落子
+					</span>
 				</div>
+			</div>
+		</div>
+	);
+}
+
+function RoomBadge({ code }: { code: string }) {
+	const [copied, setCopied] = useState(false);
+	return (
+		<button
+			className="room-badge"
+			onClick={() => {
+				navigator.clipboard.writeText(code).then(() => {
+					setCopied(true);
+					setTimeout(() => setCopied(false), 1500);
+				});
+			}}
+			title="点击复制房间码"
+		>
+			<span className="room-badge-label">房间</span>
+			<span className="room-badge-code">{code}</span>
+			<span className="room-badge-action">{copied ? "已复制" : "复制"}</span>
+		</button>
+	);
+}
+
+function PlayerCard({
+	player, isMe, isCurrent, stoneCount, aiThinking,
+}: {
+	player: RoomPlayerInfo;
+	isMe: boolean;
+	isCurrent: boolean;
+	stoneCount: number;
+	aiThinking: boolean;
+}) {
+	const style = PLAYER_STYLES[player.playerIndex] ?? PLAYER_STYLES[0]!;
+	return (
+		<div className={`player-card${isCurrent ? " current" : ""}`}>
+			<div className="player-stone" style={{ background: style.stone, borderColor: style.stroke }} />
+			<div className="player-info">
+				<div className="player-name">
+					{player.connected ? player.name : "(待加入)"}
+					{isMe && <span className="player-tag-me">你</span>}
+					{player.isAi && player.aiLevel && (
+						<span className="player-tag-ai">{AI_LABELS[player.aiLevel].zh}</span>
+					)}
+				</div>
+				<div className="player-meta">
+					<span>{stoneCount} 子</span>
+					{aiThinking && <span className="ai-thinking">思考中…</span>}
+					{isCurrent && !aiThinking && <span className="turn-tag">该你</span>}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function GameMeta({
+	config, matchStarted, flow, myPlayerIndex,
+}: {
+	config: GameConfig;
+	matchStarted: boolean;
+	flow: { turnSeq: number; isEnded: boolean; passStates: boolean[]; currentPlayerIndex: number };
+	myPlayerIndex: number;
+}) {
+	return (
+		<div className="game-meta">
+			<div className="meta-row"><span>棋盘</span><b>{config.boardSize} × {config.boardSize}</b></div>
+			<div className="meta-row"><span>硬度</span><b>{config.stoneHardness.toFixed(2)}</b></div>
+			<div className="meta-row"><span>力度</span><b>{config.stoneStrength.toFixed(2)}</b></div>
+			{matchStarted && !flow.isEnded && (
+				<div className="meta-row"><span>第 {flow.turnSeq + 1} 手</span><b>{flow.currentPlayerIndex === myPlayerIndex ? "你" : "对手"}</b></div>
 			)}
-
-			{rejection && <div className="error">{rejection}</div>}
-
-			<div className="game-board">
-				<canvas ref={baseRef} />
-				<canvas ref={previewRef} className="preview" />
-				<canvas
-					ref={inputRef}
-					className="input"
-					width={BOARD_PX}
-					height={BOARD_PX}
-					style={{ width: BOARD_PX, height: BOARD_PX }}
-					onMouseMove={handleMove}
-					onMouseLeave={handleLeave}
-					onClick={handleClick}
-				/>
-			</div>
-
-			<div className="game-controls">
-				<button className="btn secondary" onClick={handlePass} disabled={!myTurn}>
-					Pass
-				</button>
-				<button className="btn danger" onClick={onLeave}>
-					离开房间
-				</button>
-				<span className="shrug">
-					左键落子（吸附） · 按住 <kbd>Shift</kbd> 自由落子
-				</span>
-			</div>
 		</div>
 	);
 }

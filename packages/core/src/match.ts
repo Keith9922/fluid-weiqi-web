@@ -3,6 +3,7 @@
 
 import { BoardState, DEFAULT_BOARD_CONFIG, type BoardConfig } from "./board.ts";
 import { findCapturedStones, isSuicide } from "./capture.ts";
+import type { GameConfig } from "./protocol.ts";
 import type {
 	MatchActionRequest,
 	MatchActionResult,
@@ -21,6 +22,30 @@ export const DEFAULT_MATCH_CONFIG: MatchConfig = {
 	board: DEFAULT_BOARD_CONFIG,
 	stoneStrength: 1,
 };
+
+// Convert from the network-protocol GameConfig into an internal MatchConfig.
+export function matchConfigFromGameConfig(gc: GameConfig): MatchConfig {
+	const boardSize = clampInt(gc.boardSize, 5, 25);
+	const hardness = clampNum(gc.stoneHardness, 0, 0.99);
+	const strength = clampNum(gc.stoneStrength, 0.1, 5);
+	return {
+		board: {
+			playerCount: 2,
+			size: boardSize,
+			stoneHardness: hardness,
+			defaultStrength: strength,
+		},
+		stoneStrength: strength,
+	};
+}
+
+function clampNum(v: number, lo: number, hi: number): number {
+	if (Number.isNaN(v)) return (lo + hi) / 2;
+	return Math.min(hi, Math.max(lo, v));
+}
+function clampInt(v: number, lo: number, hi: number): number {
+	return Math.round(clampNum(v, lo, hi));
+}
 
 export class Match {
 	readonly board: BoardState;
