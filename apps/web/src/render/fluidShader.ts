@@ -1,23 +1,22 @@
-// WebGL2 fluid renderer for the influence field.
+// WebGL2 fluid renderer for the influence field — "blob" rendering.
 //
-// Faithfully ports the alpha-curve from the original
-// Assets/Resources/Shaders/BoardDisplay.shader (lines 104-126):
+// This is the visual model used by the original Fluid Weiqi:
 //
-//   t = totalDensity - 1            // shift by 1 -> below 1 is invisible
-//   if t < 0: alpha = 0
-//   t = exp(t)
-//   alpha_raw = (t - 1) / (t + 1)   // tanh-like normalization to [0, 1)
-//   alpha = mix(MIN_ALPHA, 1, alpha_raw ^ ALPHA_CURVE)
-//   alpha = alpha ^ mix(1, 8, luminance)  // black territory needs higher
-//                                            alpha to stay visible
+//   - Stones do not have separate 3D graphics. The visible piece IS the
+//     influence field's level set.
+//   - Where total influence > 1 and a player dominates, the pixel is that
+//     player's solid color (pure black / pure white).
+//   - Where total influence < 1, the pixel is the wood background.
+//   - At the level-set edge, a small smoothstep gives anti-aliasing.
+//   - Where two players' influences are close to equal, a sharp split
+//     between black and white emerges (the contact line between groups).
 //
-// On top of that we add the liquid feel that's missing in static screenshots:
-//   - Subtle domain-warping noise (Perlin-ish, octaves) shifts the sample
-//     point slightly over time. The displacement is tiny (~0.04 grid cells)
-//     but it makes the boundary breathe instead of sitting still.
-//   - Boundary rim highlight: a smoothstep ring around the territory edge
-//     gives the field a glassy, surface-tension-like feel.
-//   - Inner sheen: brighter spots inside high-density territory imply depth.
+// Liquid feel comes from:
+//   - Multiple stones' influences SUM, so blobs naturally merge / coalesce
+//     when two same-color stones are placed close.
+//   - The level-set boundary is intrinsically curved and irregular.
+//   - A subtle time-varying domain warp shifts the boundary slightly so it
+//     "breathes" / flows.
 
 import type { BoardSnapshot } from "@fluid/core";
 
@@ -48,11 +47,9 @@ uniform sampler2D u_stones;       // ${MAX_STONES} x 1, RGBA32F: (x, y, strength
 uniform int u_stoneCount;
 
 #define POWER_THRESHOLD 4.0
-#define MIN_ALPHA 0.5
-#define ALPHA_CURVE 1.0
+#define BLOB_THRESHOLD 1.0
+#define BOUNDARY_SOFTNESS 0.08
 
-// Per-stone Gaussian-ish contribution. Matches BoardDistribution.compute
-// PowerContribution() exactly.
 float influenceFromStone(vec2 boardPoint, vec2 center, float strength) {
     float r = max(length(boardPoint - center), 0.001);
     float rNorm = 2.0 * r / sqrt(strength);
@@ -62,7 +59,6 @@ float influenceFromStone(vec2 boardPoint, vec2 center, float strength) {
     return POWER_THRESHOLD * tanh(raw / POWER_THRESHOLD);
 }
 
-// Cheap value-noise.
 float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
@@ -87,18 +83,12 @@ float fbm(vec2 p) {
     return v;
 }
 
-// Domain warp — slow, organic motion at the boundary.
 vec2 liquidWarp(vec2 boardPoint, float t) {
     vec2 q = vec2(
-        fbm(boardPoint * 0.45 + vec2(0.0, t * 0.08)),
-        fbm(boardPoint * 0.45 + vec2(5.7, t * 0.06))
+        fbm(boardPoint * 0.5 + vec2(0.0, t * 0.06)),
+        fbm(boardPoint * 0.5 + vec2(5.7, t * 0.05))
     );
-    vec2 r = vec2(
-        fbm(boardPoint * 0.45 + 4.0 * q + vec2(1.7, 9.2)),
-        fbm(boardPoint * 0.45 + 4.0 * q + vec2(8.3, 2.8))
-    );
-    // r is in [0,1]; remap to [-0.5, 0.5] then scale.
-    return (r - 0.5) * 0.18;
+    return (q - 0.5) * 0.10;
 }
 
 void influenceAt(vec2 boardPoint, out float infl0, out float infl1) {
@@ -113,77 +103,63 @@ void influenceAt(vec2 boardPoint, out float infl0, out float infl1) {
     }
 }
 
-// Faithful port of BoardDisplay.shader AlphaFromDensity.
-float alphaFromDensity(float total) {
-    float t = total - 1.0;
-    if (t <= 0.0) return 0.0;
-    float et = exp(t);
-    float raw = (et - 1.0) / (et + 1.0);    // [0, 1)
-    return mix(MIN_ALPHA, 1.0, pow(raw, ALPHA_CURVE));
+vec3 woodColor(vec2 uv) {
+    // Warm pine board, matching the upstream Mac build's look.
+    vec3 base   = vec3(0.66, 0.48, 0.28);
+    vec3 darker = vec3(0.55, 0.38, 0.20);
+    // Long horizontal grain lines + fine speckle.
+    float grain = 0.5
+        + 0.35 * sin(uv.y * 110.0 + sin(uv.x * 8.0) * 1.6)
+        + 0.20 * sin(uv.y * 32.0  + sin(uv.x * 3.0) * 1.2);
+    grain = grain * 0.5;
+    float speckle = noise(uv * 320.0) * 0.05;
+    return mix(darker, base, clamp(grain + speckle, 0.0, 1.0));
 }
 
 void main() {
-    // UV -> board coords. In WebGL, v_uv.y = 1 is the TOP of the screen,
-    // and Canvas2D draws stones such that board y=max sits at the top of
-    // the canvas (boardToPx flips: c.y = pad + (max - p.y)/span*playable).
-    // So top of screen -> max board y; no extra flip needed in v_uv.y.
     float bx = mix(u_minX, u_maxX, v_uv.x);
     float by = mix(u_minY, u_maxY, v_uv.y);
     vec2 boardPoint = vec2(bx, by);
 
-    // Liquid warp at the sample position. Tiny offset; shapes the rim only.
-    vec2 warp = liquidWarp(boardPoint, u_time);
-    vec2 sampPoint = boardPoint + warp;
+    // Tiny domain warp -> blob edges shift like a slow current.
+    vec2 sampPoint = boardPoint + liquidWarp(boardPoint, u_time);
 
     float infl0, infl1;
     influenceAt(sampPoint, infl0, infl1);
     float total = infl0 + infl1;
 
-    // Wood base color of the board (matches Unity scene's wood material).
-    vec3 wood     = vec3(0.235, 0.184, 0.137);
-    vec3 woodLite = vec3(0.286, 0.224, 0.169);
-    float grain = noise(v_uv * 80.0) * 0.04 + noise(v_uv * 8.0) * 0.06;
-    vec3 baseColor = mix(wood, woodLite, grain);
+    vec3 wood = woodColor(v_uv);
 
-    // Threshold check — below 1 there is NO territory at all.
-    if (total <= 1.0) {
-        outColor = vec4(baseColor, 1.0);
+    // Outside the level set: pure wood.
+    if (total < BLOB_THRESHOLD - BOUNDARY_SOFTNESS) {
+        outColor = vec4(wood, 1.0);
         return;
     }
 
-    // Player colors. We use slightly tinted black/white so the field is
-    // distinguishable on the wood without going all neon.
-    vec3 blackColor = vec3(0.06, 0.06, 0.10);
-    vec3 whiteColor = vec3(0.95, 0.92, 0.84);
+    // Outer edge anti-alias: smoothstep across (1 - softness, 1 + softness).
+    float blobAlpha = smoothstep(
+        BLOB_THRESHOLD - BOUNDARY_SOFTNESS,
+        BLOB_THRESHOLD + BOUNDARY_SOFTNESS,
+        total
+    );
 
-    float share1 = infl1 / max(total, 1e-6);
-    vec3 territoryColor = (infl0 >= infl1) ? blackColor : whiteColor;
+    // Player split — sharp transition where the two influences are equal.
+    // Below 0.5 share, white dominates; above, black dominates.
+    float share0 = infl0 / max(total, 1e-6);
+    float toBlack = smoothstep(0.45, 0.55, share0);
 
-    float alpha = alphaFromDensity(total);
+    vec3 black = vec3(0.04, 0.04, 0.05);
+    vec3 white = vec3(0.96, 0.94, 0.90);
+    vec3 blobColor = mix(white, black, toBlack);
 
-    // Black territory needs higher alpha to remain visible on the dark wood
-    // (matches the luminance trick in BoardDisplay.shader line 125).
-    float lum = dot(territoryColor, vec3(0.299, 0.587, 0.114));
-    alpha = pow(alpha, mix(1.0, 8.0, lum));
+    // Ink-like rim shading: just inside the boundary, a thin band that's
+    // slightly different (a little darker for white, a little lighter for
+    // black) — produces the "drop on paper" look.
+    float rimBand = smoothstep(0.0, 0.18, blobAlpha) * (1.0 - smoothstep(0.18, 0.50, blobAlpha));
+    vec3 rimDelta = mix(vec3(0.10, 0.10, 0.12), vec3(-0.06, -0.06, -0.05), toBlack);
+    blobColor += rimDelta * rimBand * 0.55;
 
-    // Soft pulse near the boundary — a smoothstep ring around alpha~0.4
-    // produces a glassy "surface tension" highlight that subtly moves.
-    float rim = smoothstep(0.05, 0.35, alpha) * (1.0 - smoothstep(0.35, 0.85, alpha));
-    float pulse = 0.55 + 0.45 * sin(u_time * 0.7 + total * 1.3);
-    vec3 rimTint = mix(vec3(0.55, 0.55, 0.7), vec3(0.95, 0.92, 0.78), share1);
-    vec3 boundaryGlow = rimTint * rim * pulse * 0.18;
-
-    // Inner sheen — small bright spots inside high-density territory imply
-    // depth; uses a slow-moving fbm so it shifts like fluid surface.
-    float sheen = fbm(sampPoint * 1.3 + vec2(u_time * 0.04, -u_time * 0.05));
-    sheen = smoothstep(0.55, 0.85, sheen) * smoothstep(0.45, 0.85, alpha);
-    vec3 sheenTint = mix(vec3(0.30, 0.30, 0.55), vec3(1.0, 0.96, 0.85), share1);
-
-    vec3 finalColor = mix(baseColor, territoryColor, alpha);
-    finalColor += boundaryGlow;
-    finalColor = mix(finalColor, sheenTint, sheen * 0.35);
-
-    outColor = vec4(finalColor, 1.0);
+    outColor = vec4(mix(wood, blobColor, blobAlpha), 1.0);
 }
 `;
 

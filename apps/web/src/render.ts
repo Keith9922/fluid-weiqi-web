@@ -14,12 +14,11 @@ export const PADDING_RATIO = 0.06;
 export type StoneStyle = {
 	stone: string;
 	stroke: string;
-	highlight: string;
 };
 
 export const PLAYER_STYLES: StoneStyle[] = [
-	{ stone: "#15110d", stroke: "#000",     highlight: "rgba(255,255,255,0.18)" },  // black
-	{ stone: "#f6efe2", stroke: "#7a6a4a", highlight: "rgba(255,255,255,0.55)" },  // ivory
+	{ stone: "#0a0a0a", stroke: "#000" },        // black
+	{ stone: "#f8f4ed", stroke: "#a89878" },     // ivory
 ];
 
 // ---- Public API ----------------------------------------------------------
@@ -98,6 +97,7 @@ export class BoardRenderer {
 		ctx.clearRect(0, 0, this.pixelSize, this.pixelSize);
 
 		const lay = layout(this.pixelSize, board);
+		drawPlayableBorder(ctx, lay.pad, lay.playable);
 		drawGrid(ctx, board, lay.boardToPx);
 		drawStones(ctx, board, lay.boardToPx);
 	}
@@ -171,6 +171,17 @@ function stoneRadius(board: BoardSnapshot, boardToPx: (p: Vec2) => Vec2): number
 
 // ---- Drawing primitives --------------------------------------------------
 
+function drawPlayableBorder(
+	ctx: CanvasRenderingContext2D,
+	pad: number,
+	playable: number,
+): void {
+	// Dark inner frame around the playable area, matching the upstream build.
+	ctx.strokeStyle = "rgba(20, 14, 8, 0.85)";
+	ctx.lineWidth = 2;
+	ctx.strokeRect(pad - 0.5, pad - 0.5, playable + 1, playable + 1);
+}
+
 function drawGrid(
 	ctx: CanvasRenderingContext2D,
 	board: BoardSnapshot,
@@ -214,52 +225,30 @@ function standardHoshi(size: number): number[] | null {
 	return null;
 }
 
+// Stones are NOT drawn as 3D spheres — the visible piece is the influence
+// blob rendered by the WebGL fluid shader. We just place a tiny marker
+// dot at each stone's center so the player can always see exactly where
+// they (or the AI) clicked, even when the stone alone has too little
+// influence to form a blob.
 function drawStones(
 	ctx: CanvasRenderingContext2D,
 	board: BoardSnapshot,
 	boardToPx: (p: Vec2) => Vec2,
 ): void {
 	const r = stoneRadius(board, boardToPx);
+	const markerR = Math.max(2, r * 0.18);
 	for (const s of board.stones) {
 		const c = boardToPx(s.position);
-		const style = PLAYER_STYLES[s.playerIndex] ?? PLAYER_STYLES[0]!;
-
-		// Soft drop shadow directly below the stone — radial gradient so it
-		// fades smoothly into the wood instead of being a hard disk.
-		const shCx = c.x;
-		const shCy = c.y + r * 0.45;
-		const shR = r * 1.05;
-		const shadow = ctx.createRadialGradient(shCx, shCy, r * 0.2, shCx, shCy, shR);
-		shadow.addColorStop(0, "rgba(0, 0, 0, 0.42)");
-		shadow.addColorStop(0.6, "rgba(0, 0, 0, 0.18)");
-		shadow.addColorStop(1, "rgba(0, 0, 0, 0)");
-		ctx.fillStyle = shadow;
+		const isBlack = s.playerIndex === 0;
+		ctx.fillStyle = isBlack ? "#0a0a0a" : "#f8f4ed";
 		ctx.beginPath();
-		ctx.arc(shCx, shCy, shR, 0, Math.PI * 2);
+		ctx.arc(c.x, c.y, markerR, 0, Math.PI * 2);
 		ctx.fill();
-
-		// Stone body with light from directly above:
-		//   - inner circle: small bright spot at the TOP (center-x, slightly
-		//     above the stone center)
-		//   - outer circle: full stone radius
-		// Using `c.y - r * 0.55` puts the highlight on the "northern" cap.
-		const grad = ctx.createRadialGradient(
-			c.x, c.y - r * 0.5, r * 0.08,   // bright origin at top of stone
-			c.x, c.y, r,                       // outer = stone radius
-		);
-		grad.addColorStop(0, style.highlight);
-		grad.addColorStop(0.45, style.stone);
-		grad.addColorStop(1, style.stroke);
-		ctx.fillStyle = grad;
+		// Thin contrast outline so the dot reads on either color blob or wood.
+		ctx.strokeStyle = isBlack ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.55)";
+		ctx.lineWidth = 0.8;
 		ctx.beginPath();
-		ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-		ctx.fill();
-
-		// Crisp outline.
-		ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
-		ctx.lineWidth = 1;
-		ctx.beginPath();
-		ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+		ctx.arc(c.x, c.y, markerR, 0, Math.PI * 2);
 		ctx.stroke();
 	}
 }
