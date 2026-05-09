@@ -595,9 +595,16 @@ input:focus {
 	max-width: 100%;
 	aspect-ratio: 1 / 1;
 }
-.game-board canvas, .game-board canvas.fluid, .game-board canvas.input {
-	max-width: 100%;
-	height: auto !important;
+/* All canvases fill the board container so the responsive width applies
+   uniformly to background, overlay, preview, and input layers.
+   The drawing buffer keeps its original pixel size (set via width/height attrs)
+   while CSS scales the visible size proportionally. */
+.game-board canvas {
+	position: absolute !important;
+	inset: 0 !important;
+	width: 100% !important;
+	height: 100% !important;
+	display: block;
 }
 .game-board canvas {
 	position: absolute;

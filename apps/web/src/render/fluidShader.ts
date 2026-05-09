@@ -1,14 +1,23 @@
 // WebGL2 fluid renderer for the influence field.
 //
-// One full-screen quad. The fragment shader computes the per-pixel influence
-// for each player by summing Gaussian-shaped contributions from each stone
-// (formula matches packages/core/src/influence.ts and the original
-// BoardDistribution.compute), determines the dominant player, and colors
-// the pixel with a smooth, time-varying gradient that gives the field a
-// "liquid" feel without sacrificing the strict math.
+// Faithfully ports the alpha-curve from the original
+// Assets/Resources/Shaders/BoardDisplay.shader (lines 104-126):
 //
-// Stones are uploaded as a flat float texture (vec4 = x, y, strength,
-// playerIndex) — supports up to MAX_STONES per side without recompiling.
+//   t = totalDensity - 1            // shift by 1 -> below 1 is invisible
+//   if t < 0: alpha = 0
+//   t = exp(t)
+//   alpha_raw = (t - 1) / (t + 1)   // tanh-like normalization to [0, 1)
+//   alpha = mix(MIN_ALPHA, 1, alpha_raw ^ ALPHA_CURVE)
+//   alpha = alpha ^ mix(1, 8, luminance)  // black territory needs higher
+//                                            alpha to stay visible
+//
+// On top of that we add the liquid feel that's missing in static screenshots:
+//   - Subtle domain-warping noise (Perlin-ish, octaves) shifts the sample
+//     point slightly over time. The displacement is tiny (~0.04 grid cells)
+//     but it makes the boundary breathe instead of sitting still.
+//   - Boundary rim highlight: a smoothstep ring around the territory edge
+//     gives the field a glassy, surface-tension-like feel.
+//   - Inner sheen: brighter spots inside high-density territory imply depth.
 
 import type { BoardSnapshot } from "@fluid/core";
 
@@ -23,8 +32,6 @@ void main() {
 }
 `;
 
-// Color tints — black side gets a deep desaturated indigo for territory,
-// white side a warm cream. Background is the wood color of the board.
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
@@ -41,7 +48,11 @@ uniform sampler2D u_stones;       // ${MAX_STONES} x 1, RGBA32F: (x, y, strength
 uniform int u_stoneCount;
 
 #define POWER_THRESHOLD 4.0
+#define MIN_ALPHA 0.5
+#define ALPHA_CURVE 1.0
 
+// Per-stone Gaussian-ish contribution. Matches BoardDistribution.compute
+// PowerContribution() exactly.
 float influenceFromStone(vec2 boardPoint, vec2 center, float strength) {
     float r = max(length(boardPoint - center), 0.001);
     float rNorm = 2.0 * r / sqrt(strength);
@@ -51,7 +62,7 @@ float influenceFromStone(vec2 boardPoint, vec2 center, float strength) {
     return POWER_THRESHOLD * tanh(raw / POWER_THRESHOLD);
 }
 
-// Soft 2D noise for the gentle "breathing" feel.
+// Cheap value-noise.
 float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
@@ -65,64 +76,109 @@ float noise(vec2 p) {
     vec2 u = f * f * (3.0 - 2.0 * f);
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
+float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 4; ++i) {
+        v += a * noise(p);
+        p *= 2.0;
+        a *= 0.5;
+    }
+    return v;
+}
 
-void main() {
-    // Map UV [0,1] to the playable area in board coordinates.
-    float bx = mix(u_minX, u_maxX, v_uv.x);
-    float by = mix(u_minY, u_maxY, 1.0 - v_uv.y);  // y-flip so board y goes up
-    vec2 boardPoint = vec2(bx, by);
+// Domain warp — slow, organic motion at the boundary.
+vec2 liquidWarp(vec2 boardPoint, float t) {
+    vec2 q = vec2(
+        fbm(boardPoint * 0.45 + vec2(0.0, t * 0.08)),
+        fbm(boardPoint * 0.45 + vec2(5.7, t * 0.06))
+    );
+    vec2 r = vec2(
+        fbm(boardPoint * 0.45 + 4.0 * q + vec2(1.7, 9.2)),
+        fbm(boardPoint * 0.45 + 4.0 * q + vec2(8.3, 2.8))
+    );
+    // r is in [0,1]; remap to [-0.5, 0.5] then scale.
+    return (r - 0.5) * 0.18;
+}
 
-    // Sum contributions per player (2 players for MVP).
-    float infl0 = 0.0;
-    float infl1 = 0.0;
+void influenceAt(vec2 boardPoint, out float infl0, out float infl1) {
+    infl0 = 0.0;
+    infl1 = 0.0;
     for (int i = 0; i < ${MAX_STONES}; ++i) {
         if (i >= u_stoneCount) break;
         vec4 s = texelFetch(u_stones, ivec2(i, 0), 0);
         float c = influenceFromStone(boardPoint, s.xy, s.z);
-        if (s.w < 1.5) {  // owner+1 = 1 -> player 0
-            infl0 += c;
-        } else {           // owner+1 = 2 -> player 1
-            infl1 += c;
-        }
+        if (s.w < 1.5) infl0 += c;
+        else            infl1 += c;
     }
+}
 
+// Faithful port of BoardDisplay.shader AlphaFromDensity.
+float alphaFromDensity(float total) {
+    float t = total - 1.0;
+    if (t <= 0.0) return 0.0;
+    float et = exp(t);
+    float raw = (et - 1.0) / (et + 1.0);    // [0, 1)
+    return mix(MIN_ALPHA, 1.0, pow(raw, ALPHA_CURVE));
+}
+
+void main() {
+    // UV -> board coords (with y flip so board y goes up).
+    float bx = mix(u_minX, u_maxX, v_uv.x);
+    float by = mix(u_minY, u_maxY, 1.0 - v_uv.y);
+    vec2 boardPoint = vec2(bx, by);
+
+    // Liquid warp at the sample position. Tiny offset; shapes the rim only.
+    vec2 warp = liquidWarp(boardPoint, u_time);
+    vec2 sampPoint = boardPoint + warp;
+
+    float infl0, infl1;
+    influenceAt(sampPoint, infl0, infl1);
     float total = infl0 + infl1;
 
-    // Wood base color of the board.
-    vec3 wood     = vec3(0.235, 0.184, 0.137);   // deep walnut
-    vec3 woodLite = vec3(0.286, 0.224, 0.169);   // a touch lighter
-    // Subtle wood-grain noise.
-    float grain = noise(v_uv * 60.0) * 0.04 + noise(v_uv * 8.0) * 0.06;
+    // Wood base color of the board (matches Unity scene's wood material).
+    vec3 wood     = vec3(0.235, 0.184, 0.137);
+    vec3 woodLite = vec3(0.286, 0.224, 0.169);
+    float grain = noise(v_uv * 80.0) * 0.04 + noise(v_uv * 8.0) * 0.06;
     vec3 baseColor = mix(wood, woodLite, grain);
 
-    if (total < 0.001) {
+    // Threshold check — below 1 there is NO territory at all.
+    if (total <= 1.0) {
         outColor = vec4(baseColor, 1.0);
         return;
     }
 
-    // Player tints — subtle so stones stay visually dominant.
-    vec3 blackTint = vec3(0.10, 0.10, 0.18);  // cool indigo for black's territory
-    vec3 whiteTint = vec3(0.86, 0.78, 0.62);  // warm cream for white's territory
+    // Player colors. We use slightly tinted black/white so the field is
+    // distinguishable on the wood without going all neon.
+    vec3 blackColor = vec3(0.06, 0.06, 0.10);
+    vec3 whiteColor = vec3(0.95, 0.92, 0.84);
 
-    float share0 = infl0 / max(total, 1e-6);
     float share1 = infl1 / max(total, 1e-6);
-    float dominance = abs(share0 - share1);
+    vec3 territoryColor = (infl0 >= infl1) ? blackColor : whiteColor;
 
-    // Liquid breathing: time-varying noise modulates the apparent strength.
-    float breathe = 0.85 + 0.15 * noise(v_uv * 4.0 + vec2(u_time * 0.13, u_time * 0.09));
+    float alpha = alphaFromDensity(total);
 
-    // Saturation grows with both total influence (stronger near stones) and
-    // dominance margin (deeper at clear territory, faded at the front line).
-    float satTotal = 1.0 - exp(-total * 0.6);
-    float saturation = clamp(satTotal * (0.35 + 0.65 * dominance) * breathe, 0.0, 0.95);
+    // Black territory needs higher alpha to remain visible on the dark wood
+    // (matches the luminance trick in BoardDisplay.shader line 125).
+    float lum = dot(territoryColor, vec3(0.299, 0.587, 0.114));
+    alpha = pow(alpha, mix(1.0, 8.0, lum));
 
-    vec3 territoryColor = mix(blackTint, whiteTint, share1);
-    vec3 finalColor = mix(baseColor, territoryColor, saturation);
+    // Soft pulse near the boundary — a smoothstep ring around alpha~0.4
+    // produces a glassy "surface tension" highlight that subtly moves.
+    float rim = smoothstep(0.05, 0.35, alpha) * (1.0 - smoothstep(0.35, 0.85, alpha));
+    float pulse = 0.55 + 0.45 * sin(u_time * 0.7 + total * 1.3);
+    vec3 rimTint = mix(vec3(0.55, 0.55, 0.7), vec3(0.95, 0.92, 0.78), share1);
+    vec3 boundaryGlow = rimTint * rim * pulse * 0.18;
 
-    // Light glow ring near stones — exaggerates the dominance ramp at high
-    // influence but tapers off in mid-board.
-    float glow = smoothstep(1.5, 4.0, total) * 0.18 * dominance;
-    finalColor += vec3(glow * (1.0 - share0 * 0.4), glow, glow * (1.0 - share1 * 0.4));
+    // Inner sheen — small bright spots inside high-density territory imply
+    // depth; uses a slow-moving fbm so it shifts like fluid surface.
+    float sheen = fbm(sampPoint * 1.3 + vec2(u_time * 0.04, -u_time * 0.05));
+    sheen = smoothstep(0.55, 0.85, sheen) * smoothstep(0.45, 0.85, alpha);
+    vec3 sheenTint = mix(vec3(0.30, 0.30, 0.55), vec3(1.0, 0.96, 0.85), share1);
+
+    vec3 finalColor = mix(baseColor, territoryColor, alpha);
+    finalColor += boundaryGlow;
+    finalColor = mix(finalColor, sheenTint, sheen * 0.35);
 
     outColor = vec4(finalColor, 1.0);
 }
@@ -141,7 +197,6 @@ export class FluidRenderer {
 		if (!gl) throw new Error("WebGL2 not supported");
 		this.gl = gl;
 
-		// Required for texelFetch on RGBA32F.
 		if (!gl.getExtension("EXT_color_buffer_float")) {
 			console.warn("EXT_color_buffer_float not available; field rendering may fail.");
 		}
@@ -198,7 +253,6 @@ export class FluidRenderer {
 		gl.useProgram(this.program);
 		gl.bindVertexArray(this.vao);
 
-		// Upload stones into the texture.
 		const data = new Float32Array(MAX_STONES * 4);
 		const count = Math.min(MAX_STONES, board.stones.length);
 		for (let i = 0; i < count; ++i) {
