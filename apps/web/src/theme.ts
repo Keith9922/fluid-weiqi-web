@@ -25,6 +25,12 @@ export function getInitialTheme(): Theme {
 
 export function applyTheme(theme: Theme): void {
 	document.documentElement.dataset.theme = theme;
+	// Some browsers don't re-resolve a CSS custom property used in `background:
+	// var(--page-bg)` when the data-theme attribute changes — they keep the
+	// stale shorthand background. Force a repaint by reassigning style.
+	document.body.style.background = "";
+	void document.body.offsetHeight; // force reflow
+	document.body.style.background = "var(--page-bg)";
 	try {
 		localStorage.setItem(STORAGE_KEY, theme);
 	} catch {
