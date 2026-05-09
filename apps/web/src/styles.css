@@ -3,56 +3,76 @@
    ==================================================================== */
 
 :root {
-	color-scheme: dark;
+	/* Default (will be overridden by [data-theme] selectors). */
+	color-scheme: light dark;
 
-	/* Wood / paper / ink palette */
-	--bg-deep:     #14110d;
-	--bg:          #1c1814;
-	--bg-elev:     #25201a;
-	--bg-elev-2:   #312a22;
-	--line:        #3a3127;
-	--line-soft:   #2c2620;
-
-	--ink:         #ece4d3;
-	--ink-soft:    #b8ad97;
-	--ink-mute:    #8a7f68;
-
-	--accent:      #d6a86b;          /* warm gold */
+	--accent:      #d6a86b;
 	--accent-2:    #b88a4a;
-	--accent-soft: rgba(214, 168, 107, 0.15);
-
-	--p1:          #1a1610;          /* black stone */
-	--p2:          #f6efe2;          /* ivory stone */
-	--p1-tint:     #2a2840;
-	--p2-tint:     #c9b78d;
-
+	--p1:          #1a1610;
+	--p2:          #f6efe2;
 	--danger:      #c25149;
-	--success:     #7eb87d;
+	--success:     #4f9c4d;
 
 	--radius-sm: 6px;
 	--radius:    10px;
 	--radius-lg: 16px;
-
-	--shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
-	--shadow:    0 6px 18px rgba(0,0,0,0.45);
-	--shadow-lg: 0 14px 38px rgba(0,0,0,0.55);
 
 	font-family: "Noto Serif SC", "Songti SC", "Source Han Serif SC",
 		"PingFang SC", ui-serif, Georgia, serif;
 	font-feature-settings: "palt";
 }
 
+:root[data-theme="dark"] {
+	color-scheme: dark;
+	--bg-deep:     #14110d;
+	--bg:          #1c1814;
+	--bg-elev:     #25201a;
+	--bg-elev-2:   #312a22;
+	--line:        #3a3127;
+	--line-soft:   #2c2620;
+	--ink:         #ece4d3;
+	--ink-soft:    #b8ad97;
+	--ink-mute:    #8a7f68;
+	--accent-soft: rgba(214, 168, 107, 0.15);
+	--shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+	--shadow:    0 6px 18px rgba(0,0,0,0.45);
+	--shadow-lg: 0 14px 38px rgba(0,0,0,0.55);
+	--page-bg:
+		radial-gradient(circle at 20% 0%, rgba(214, 168, 107, 0.08), transparent 50%),
+		radial-gradient(circle at 80% 100%, rgba(74, 142, 192, 0.06), transparent 50%),
+		var(--bg-deep);
+}
+
+:root[data-theme="light"] {
+	color-scheme: light;
+	--bg-deep:     #efe7d4;
+	--bg:          #faf3e3;
+	--bg-elev:     #ffffff;
+	--bg-elev-2:   #f0e6d0;
+	--line:        #c8b58c;
+	--line-soft:   #ddcfac;
+	--ink:         #1f1810;
+	--ink-soft:    #3c3120;
+	--ink-mute:    #6b563a;
+	--accent-soft: rgba(184, 138, 74, 0.18);
+	--shadow-sm: 0 1px 2px rgba(70, 50, 20, 0.10);
+	--shadow:    0 4px 14px rgba(70, 50, 20, 0.14);
+	--shadow-lg: 0 12px 28px rgba(70, 50, 20, 0.20);
+	--page-bg:
+		radial-gradient(circle at 20% 0%, rgba(214, 168, 107, 0.18), transparent 55%),
+		radial-gradient(circle at 80% 100%, rgba(184, 138, 74, 0.10), transparent 55%),
+		var(--bg-deep);
+}
+
 * { box-sizing: border-box; }
 
 body {
 	margin: 0;
-	background:
-		radial-gradient(circle at 20% 0%, rgba(214, 168, 107, 0.08), transparent 50%),
-		radial-gradient(circle at 80% 100%, rgba(74, 142, 192, 0.06), transparent 50%),
-		var(--bg-deep);
+	background: var(--page-bg);
 	color: var(--ink);
 	min-height: 100vh;
 	-webkit-font-smoothing: antialiased;
+	transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 #root, .app {
@@ -72,8 +92,37 @@ a:hover { color: var(--accent-2); text-decoration: underline; }
 	justify-content: space-between;
 	padding: 1rem 1.75rem;
 	border-bottom: 1px solid var(--line-soft);
-	background: rgba(20, 17, 13, 0.6);
+	background: color-mix(in srgb, var(--bg-deep) 75%, transparent);
 	backdrop-filter: blur(10px);
+}
+
+.header-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.65rem;
+}
+
+.theme-toggle {
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: var(--bg-elev);
+	color: var(--ink-soft);
+	border: 1px solid var(--line-soft);
+	cursor: pointer;
+	font-size: 1rem;
+	font-family: inherit;
+	display: grid;
+	place-items: center;
+	transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
+}
+.theme-toggle:hover {
+	color: var(--accent);
+	border-color: var(--accent);
+	transform: rotate(15deg);
+}
+.theme-toggle:active {
+	transform: rotate(15deg) scale(0.92);
 }
 
 .brand { display: flex; align-items: center; gap: 0.85rem; }

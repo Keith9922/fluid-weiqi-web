@@ -13,6 +13,7 @@ import {
 } from "@fluid/core";
 import { Game } from "./Game.tsx";
 import { Lobby } from "./Lobby.tsx";
+import { applyTheme, getInitialTheme, toggleTheme, type Theme } from "./theme.ts";
 import { WsClient, defaultWsUrl, type WsClientStatus } from "./wsClient.ts";
 
 type RoomState = {
@@ -31,6 +32,11 @@ export function App() {
 	const [error, setError] = useState<string | null>(null);
 	const [rejection, setRejection] = useState<string | null>(null);
 	const [aiThinking, setAiThinking] = useState(false);
+	const [theme, setTheme] = useState<Theme>(() => getInitialTheme());
+
+	useEffect(() => {
+		applyTheme(theme);
+	}, [theme]);
 
 	const handleMessage = useCallback((msg: ServerMessage) => {
 		switch (msg.t) {
@@ -151,7 +157,17 @@ export function App() {
 						<div className="brand-sub">Web 版 · 致敬原作者 <a href="https://github.com/WangNianyi2001/Fluid-Weiqi" target="_blank" rel="noreferrer">@WangNianyi2001</a></div>
 					</div>
 				</div>
-				<div className={`status status-${status}`}>{statusLabel(status)}</div>
+				<div className="header-actions">
+					<button
+						className="theme-toggle"
+						onClick={() => setTheme(t => toggleTheme(t))}
+						aria-label={theme === "light" ? "切换到深色模式" : "切换到浅色模式"}
+						title={theme === "light" ? "切换到深色模式" : "切换到浅色模式"}
+					>
+						{theme === "light" ? "☾" : "☀"}
+					</button>
+					<div className={`status status-${status}`}>{statusLabel(status)}</div>
+				</div>
 			</header>
 
 			<main className="app-main">

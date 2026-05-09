@@ -85,7 +85,7 @@ export class BoardRenderer {
 	private startAnimation(): void {
 		if (this.rafId !== null) return;
 		const tick = () => {
-			if (this.currentBoard) this.fluid.render(this.currentBoard);
+			if (this.currentBoard) this.fluid.render(this.currentBoard, PADDING_RATIO);
 			this.rafId = requestAnimationFrame(tick);
 		};
 		this.rafId = requestAnimationFrame(tick);

@@ -43,6 +43,7 @@ uniform float u_minX;
 uniform float u_minY;
 uniform float u_maxX;
 uniform float u_maxY;
+uniform float u_padRatio;          // CSS padding fraction (0.06 = 6% on each side)
 uniform sampler2D u_stones;       // ${MAX_STONES} x 1, RGBA32F: (x, y, strength, owner+1)
 uniform int u_stoneCount;
 
@@ -117,8 +118,23 @@ vec3 woodColor(vec2 uv) {
 }
 
 void main() {
-    float bx = mix(u_minX, u_maxX, v_uv.x);
-    float by = mix(u_minY, u_maxY, v_uv.y);
+    // The Canvas2D overlay draws stones inside a padded inner area
+    // (PADDING_RATIO of the canvas on every side). The fluid blobs MUST
+    // align with those stones, so we map the same padded sub-rect of the
+    // canvas to the board area, and render plain wood outside it.
+    float padR = u_padRatio;
+    vec2 playableUv = (v_uv - vec2(padR)) / max(1.0 - 2.0 * padR, 1e-6);
+
+    vec3 wood = woodColor(v_uv);
+
+    if (any(lessThan(playableUv, vec2(0.0))) || any(greaterThan(playableUv, vec2(1.0)))) {
+        // Outside the playable area — only the wood frame.
+        outColor = vec4(wood, 1.0);
+        return;
+    }
+
+    float bx = mix(u_minX, u_maxX, playableUv.x);
+    float by = mix(u_minY, u_maxY, playableUv.y);
     vec2 boardPoint = vec2(bx, by);
 
     // Tiny domain warp -> blob edges shift like a slow current.
@@ -127,8 +143,6 @@ void main() {
     float infl0, infl1;
     influenceAt(sampPoint, infl0, infl1);
     float total = infl0 + infl1;
-
-    vec3 wood = woodColor(v_uv);
 
     // Outside the level set: pure wood.
     if (total < BLOB_THRESHOLD - BOUNDARY_SOFTNESS) {
@@ -211,6 +225,7 @@ export class FluidRenderer {
 			minY: gl.getUniformLocation(this.program, "u_minY"),
 			maxX: gl.getUniformLocation(this.program, "u_maxX"),
 			maxY: gl.getUniformLocation(this.program, "u_maxY"),
+			padRatio: gl.getUniformLocation(this.program, "u_padRatio"),
 			stones: gl.getUniformLocation(this.program, "u_stones"),
 			stoneCount: gl.getUniformLocation(this.program, "u_stoneCount"),
 		};
@@ -227,7 +242,7 @@ export class FluidRenderer {
 		gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 	}
 
-	render(board: BoardSnapshot): void {
+	render(board: BoardSnapshot, padRatio: number = 0): void {
 		const gl = this.gl;
 		gl.useProgram(this.program);
 		gl.bindVertexArray(this.vao);
@@ -251,6 +266,7 @@ export class FluidRenderer {
 		gl.uniform1f(this.uniforms.minY!, board.shrinkMargin);
 		gl.uniform1f(this.uniforms.maxX!, board.size - board.shrinkMargin);
 		gl.uniform1f(this.uniforms.maxY!, board.size - board.shrinkMargin);
+		gl.uniform1f(this.uniforms.padRatio!, padRatio);
 		gl.uniform1i(this.uniforms.stoneCount!, count);
 		gl.uniform1i(this.uniforms.stones!, 0);
 
