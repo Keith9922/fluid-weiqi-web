@@ -123,9 +123,12 @@ float alphaFromDensity(float total) {
 }
 
 void main() {
-    // UV -> board coords (with y flip so board y goes up).
+    // UV -> board coords. In WebGL, v_uv.y = 1 is the TOP of the screen,
+    // and Canvas2D draws stones such that board y=max sits at the top of
+    // the canvas (boardToPx flips: c.y = pad + (max - p.y)/span*playable).
+    // So top of screen -> max board y; no extra flip needed in v_uv.y.
     float bx = mix(u_minX, u_maxX, v_uv.x);
-    float by = mix(u_minY, u_maxY, 1.0 - v_uv.y);
+    float by = mix(u_minY, u_maxY, v_uv.y);
     vec2 boardPoint = vec2(bx, by);
 
     // Liquid warp at the sample position. Tiny offset; shapes the rim only.
