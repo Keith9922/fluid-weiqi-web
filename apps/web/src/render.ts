@@ -224,19 +224,31 @@ function drawStones(
 		const c = boardToPx(s.position);
 		const style = PLAYER_STYLES[s.playerIndex] ?? PLAYER_STYLES[0]!;
 
-		// Subtle drop shadow under each stone.
-		ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+		// Soft drop shadow directly below the stone — radial gradient so it
+		// fades smoothly into the wood instead of being a hard disk.
+		const shCx = c.x;
+		const shCy = c.y + r * 0.45;
+		const shR = r * 1.05;
+		const shadow = ctx.createRadialGradient(shCx, shCy, r * 0.2, shCx, shCy, shR);
+		shadow.addColorStop(0, "rgba(0, 0, 0, 0.42)");
+		shadow.addColorStop(0.6, "rgba(0, 0, 0, 0.18)");
+		shadow.addColorStop(1, "rgba(0, 0, 0, 0)");
+		ctx.fillStyle = shadow;
 		ctx.beginPath();
-		ctx.arc(c.x + 1.2, c.y + 2.2, r, 0, Math.PI * 2);
+		ctx.arc(shCx, shCy, shR, 0, Math.PI * 2);
 		ctx.fill();
 
-		// Main fill with radial gradient (off-center highlight = round look).
+		// Stone body with light from directly above:
+		//   - inner circle: small bright spot at the TOP (center-x, slightly
+		//     above the stone center)
+		//   - outer circle: full stone radius
+		// Using `c.y - r * 0.55` puts the highlight on the "northern" cap.
 		const grad = ctx.createRadialGradient(
-			c.x - r * 0.35, c.y - r * 0.45, r * 0.12,
-			c.x, c.y, r,
+			c.x, c.y - r * 0.5, r * 0.08,   // bright origin at top of stone
+			c.x, c.y, r,                       // outer = stone radius
 		);
 		grad.addColorStop(0, style.highlight);
-		grad.addColorStop(0.35, style.stone);
+		grad.addColorStop(0.45, style.stone);
 		grad.addColorStop(1, style.stroke);
 		ctx.fillStyle = grad;
 		ctx.beginPath();
