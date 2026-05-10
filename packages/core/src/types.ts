@@ -19,7 +19,7 @@ export type BoardSnapshot = {
 	stones: StonePlacement[];
 };
 
-export type MatchActionType = "place" | "pass";
+export type MatchActionType = "place" | "pass" | "resign";
 
 export type MatchActionRequest = {
 	playerIndex: number;
@@ -29,12 +29,16 @@ export type MatchActionRequest = {
 	actionSeq: number;
 };
 
+export type EndReason = "two-passes" | "resign";
+
 export type MatchFlowSnapshot = {
 	currentPlayerIndex: number;
 	turnSeq: number;
 	isEnded: boolean;
 	passStates: boolean[];
 	winnerIndex: number | null;
+	endReason?: EndReason;
+	finalScore?: { player: number; cells: number; percent: number }[];
 };
 
 export type MatchSnapshot = {

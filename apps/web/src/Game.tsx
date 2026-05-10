@@ -15,6 +15,7 @@ import { AI_LABELS } from "@fluid/core";
 import { BoardRenderer, PLAYER_STYLES } from "./render.ts";
 import { TouchLoupe } from "./TouchLoupe.tsx";
 import { Tutorial, shouldShowTutorial } from "./Tutorial.tsx";
+import { WinModal, type WinModalOutcome } from "./WinModal.tsx";
 import { detectDevice } from "./device.ts";
 
 export type GameProps = {
@@ -80,6 +81,8 @@ export function Game(props: GameProps) {
 	const [touchDragging, setTouchDragging] = useState(false);
 	const [touchLoupePx, setTouchLoupePx] = useState<{ x: number; y: number } | null>(null);
 	const [showTutorial, setShowTutorial] = useState(() => shouldShowTutorial());
+	const [confirmResign, setConfirmResign] = useState(false);
+	const [winModalDismissed, setWinModalDismissed] = useState(false);
 	const touchStateRef = useRef<{
 		pointerId: number;
 		startClientX: number;
@@ -313,6 +316,30 @@ export function Game(props: GameProps) {
 		});
 	};
 
+	const handleResignConfirm = () => {
+		setConfirmResign(false);
+		onAction({
+			playerIndex: myPlayerIndex,
+			actionType: "resign",
+			turnSeq: flow.turnSeq,
+			actionSeq: 0,
+		});
+	};
+
+	// Reset modal-dismissed state whenever a new match starts (turnSeq=0 + not ended).
+	useEffect(() => {
+		if (!flow.isEnded) setWinModalDismissed(false);
+	}, [flow.isEnded, flow.turnSeq]);
+
+	const winOutcome: WinModalOutcome | null = (() => {
+		if (!flow.isEnded) return null;
+		if (flow.winnerIndex === null) return "draw";
+		return flow.winnerIndex === myPlayerIndex ? "win" : "loss";
+	})();
+	const showWinModal = winOutcome !== null && !winModalDismissed;
+	const myFinalScore = flow.finalScore?.find(s => s.player === myPlayerIndex);
+	const oppFinalScore = flow.finalScore?.find(s => s.player !== myPlayerIndex);
+
 	const stoneCounts = [
 		board.stones.filter(s => s.playerIndex === 0).length,
 		board.stones.filter(s => s.playerIndex === 1).length,
@@ -340,14 +367,6 @@ export function Game(props: GameProps) {
 				{!matchStarted && !players.some(p => p.isAi) && (
 					<div className="banner banner-info">
 						等另一位玩家加入。把房间码 <kbd>{roomCode}</kbd> 发给对手。
-					</div>
-				)}
-
-				{flow.isEnded && (
-					<div className="banner banner-end">
-						{flow.winnerIndex === null
-							? "对局结束 · 平局"
-							: `${players[flow.winnerIndex]?.name ?? `Player ${flow.winnerIndex + 1}`} 胜！`}
 					</div>
 				)}
 
@@ -392,6 +411,13 @@ export function Game(props: GameProps) {
 					<button className="btn secondary" onClick={handlePass} disabled={!myTurn}>
 						Pass · 跳过
 					</button>
+					<button
+						className="btn ghost resign-btn"
+						onClick={() => setConfirmResign(true)}
+						disabled={flow.isEnded || !matchStarted}
+					>
+						投子认输
+					</button>
 					<button className="btn ghost" onClick={onLeave}>
 						离开房间
 					</button>
@@ -402,6 +428,32 @@ export function Game(props: GameProps) {
 					</span>
 				</div>
 			</div>
+
+			{confirmResign && (
+				<div className="confirm-backdrop" onClick={() => setConfirmResign(false)}>
+					<div className="confirm-card" onClick={e => e.stopPropagation()}>
+						<h4>确定要投子认输吗？</h4>
+						<p>认输后本局立即结束，对手获胜。</p>
+						<div className="confirm-actions">
+							<button className="btn ghost" onClick={() => setConfirmResign(false)}>取消</button>
+							<button className="btn danger" onClick={handleResignConfirm}>投子认输</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{showWinModal && winOutcome && (
+				<WinModal
+					outcome={winOutcome}
+					endReason={flow.endReason}
+					myScore={myFinalScore && { cells: myFinalScore.cells, percent: myFinalScore.percent }}
+					oppScore={oppFinalScore && { cells: oppFinalScore.cells, percent: oppFinalScore.percent }}
+					myName={players[myPlayerIndex]?.name ?? "你"}
+					oppName={players.find((_, i) => i !== myPlayerIndex)?.name ?? "对手"}
+					onLeave={onLeave}
+					onDismiss={() => setWinModalDismissed(true)}
+				/>
+			)}
 		</div>
 	);
 }

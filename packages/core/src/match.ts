@@ -2,9 +2,10 @@
 // MVP: 2 players, place / pass actions, two consecutive passes => end.
 
 import { BoardState, DEFAULT_BOARD_CONFIG, type BoardConfig } from "./board.ts";
-import { findCapturedStones, isSuicide } from "./capture.ts";
+import { buildAnalysis, findCapturedStones, isSuicide } from "./capture.ts";
 import type { GameConfig } from "./protocol.ts";
 import type {
+	EndReason,
 	MatchActionRequest,
 	MatchActionResult,
 	MatchFlowSnapshot,
@@ -55,6 +56,8 @@ export class Match {
 	private actionSeq = 0;
 	isEnded = false;
 	winnerIndex: number | null = null;
+	endReason: EndReason | undefined;
+	finalScore: { player: number; cells: number; percent: number }[] | undefined;
 	readonly passStates: boolean[];
 
 	constructor(config: MatchConfig = DEFAULT_MATCH_CONFIG) {
@@ -82,9 +85,24 @@ export class Match {
 			case "place":
 				if (!request.position) return reject("place action missing position");
 				return this.applyPlace(request, request.position);
+			case "resign":
+				return this.applyResign(request);
 			default:
 				return reject(`unknown action type: ${(request as { actionType: string }).actionType}`);
 		}
+	}
+
+	private applyResign(request: MatchActionRequest): MatchActionResult {
+		// 投子认输 — opponent wins immediately. Traditional Go convention:
+		// the resigning player loses regardless of board position.
+		const opponent = (request.playerIndex + 1) % this.board.playerCount;
+		this.endMatch("resign", opponent);
+		return {
+			accepted: true,
+			playerIndex: request.playerIndex,
+			actionSeq: request.actionSeq,
+			snapshot: this.snapshot(),
+		};
 	}
 
 	private applyPass(request: MatchActionRequest): MatchActionResult {
@@ -92,7 +110,7 @@ export class Match {
 
 		const allPassed = this.passStates.every(Boolean);
 		if (allPassed) {
-			this.endMatch();
+			this.endMatch("two-passes");
 		} else {
 			this.advanceTurn(/* clearPassOfNext */ false);
 		}
@@ -167,33 +185,61 @@ export class Match {
 		if (clearPassOfNext) this.passStates[this.currentPlayerIndex] = false;
 	}
 
-	private endMatch(): void {
+	private endMatch(reason: EndReason, forcedWinner?: number): void {
 		this.isEnded = true;
-		// Simple scoring: territory (number of stones surviving). The original
-		// uses controlled-pixel area; we'll tally stones for MVP and iterate
-		// later if the user wants richer scoring.
-		let bestScore = -1;
+		this.endReason = reason;
+
+		// Score by TERRITORY: count cells where each player controls the
+		// influence field (total >= 1 with that player dominant). This matches
+		// the live territory bar and the upstream BoardDistribution.compute
+		// CSAccumulateAreaPixelCounts kernel.
+		const grid = buildAnalysis(this.board, 64);
+		const cellsByPlayer = new Array(this.board.playerCount).fill(0);
+		const total = grid.territory.length;
+		for (let i = 0; i < total; ++i) {
+			const owner = grid.territory[i] ?? -1;
+			if (owner >= 0 && owner < this.board.playerCount) {
+				cellsByPlayer[owner]++;
+			}
+		}
+		this.finalScore = cellsByPlayer.map((cells, player) => ({
+			player,
+			cells,
+			percent: (cells / total) * 100,
+		}));
+
+		if (forcedWinner !== undefined) {
+			// Resign overrides territory scoring.
+			this.winnerIndex = forcedWinner;
+			return;
+		}
+
+		// Territory tally: highest cell count wins; ties produce no winner.
+		let bestCells = -1;
 		let winner: number | null = null;
 		for (let p = 0; p < this.board.playerCount; ++p) {
-			const score = this.board.getStones(p).length;
-			if (score > bestScore) {
-				bestScore = score;
+			const cells = cellsByPlayer[p];
+			if (cells > bestCells) {
+				bestCells = cells;
 				winner = p;
-			} else if (score === bestScore) {
-				winner = null; // tie
+			} else if (cells === bestCells) {
+				winner = null;
 			}
 		}
 		this.winnerIndex = winner;
 	}
 
 	flowSnapshot(): MatchFlowSnapshot {
-		return {
+		const snap: MatchFlowSnapshot = {
 			currentPlayerIndex: this.currentPlayerIndex,
 			turnSeq: this.turnSeq,
 			isEnded: this.isEnded,
 			passStates: [...this.passStates],
 			winnerIndex: this.winnerIndex,
 		};
+		if (this.endReason) snap.endReason = this.endReason;
+		if (this.finalScore) snap.finalScore = this.finalScore;
+		return snap;
 	}
 
 	snapshot(): MatchSnapshot {

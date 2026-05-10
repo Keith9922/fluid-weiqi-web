@@ -783,6 +783,231 @@ input:focus {
 	margin-top: 0.4rem;
 }
 
+/* ==================================================================
+   Resign confirmation + Win/Loss reveal
+   ================================================================== */
+
+.confirm-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(10, 7, 4, 0.55);
+	backdrop-filter: blur(3px);
+	display: grid;
+	place-items: center;
+	z-index: 90;
+	animation: confirm-fade 0.18s ease-out;
+}
+@keyframes confirm-fade { from { opacity: 0 } to { opacity: 1 } }
+
+.confirm-card {
+	background: var(--bg-elev);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-lg);
+	padding: 1.5rem 1.6rem 1.2rem;
+	width: min(380px, 92vw);
+	box-shadow: var(--shadow-lg);
+}
+.confirm-card h4 {
+	margin: 0 0 0.5rem;
+	font-size: 1.1rem;
+	color: var(--ink);
+}
+.confirm-card p {
+	margin: 0 0 1.1rem;
+	font-size: 0.92rem;
+	color: var(--ink-soft);
+	font-family: ui-sans-serif, system-ui, sans-serif;
+	line-height: 1.5;
+}
+.confirm-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.5rem;
+}
+
+/* ---- Win / loss reveal --------------------------------------------- */
+
+.win-backdrop {
+	position: fixed;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	z-index: 100;
+	background:
+		radial-gradient(circle at 50% 38%, rgba(20, 14, 8, 0.55), rgba(0, 0, 0, 0.85) 75%);
+	backdrop-filter: blur(8px);
+	animation: win-backdrop-in 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes win-backdrop-in {
+	from { opacity: 0; backdrop-filter: blur(0); }
+	to   { opacity: 1; backdrop-filter: blur(8px); }
+}
+
+.win-card {
+	width: min(440px, 92vw);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.8rem;
+	padding: 0 1.5rem 1.4rem;
+	animation: win-card-in 0.55s 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+	text-align: center;
+}
+@keyframes win-card-in {
+	from { transform: translateY(24px) scale(0.92); opacity: 0; }
+	to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* The giant calligraphic glyph 胜 / 负 / 和 ----------------------------- */
+.win-glyph-wrap {
+	position: relative;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	margin-bottom: 0.6rem;
+	height: 11rem;
+	overflow: visible;
+}
+.win-glyph {
+	font-family: "Noto Serif SC", "Songti SC", "Source Han Serif SC", serif;
+	font-size: 11rem;
+	font-weight: 900;
+	line-height: 1;
+	background: linear-gradient(135deg,
+		#fff5d4 0%,
+		#e6c067 30%,
+		#b88a4a 50%,
+		#d6a86b 70%,
+		#fff5d4 100%);
+	background-size: 200% 200%;
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	color: transparent;
+	filter: drop-shadow(0 4px 12px rgba(214, 168, 107, 0.45))
+	        drop-shadow(0 0 32px rgba(214, 168, 107, 0.25));
+	animation:
+		win-glyph-rise 0.7s 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+		win-glyph-shimmer 4s 0.95s ease-in-out infinite;
+	position: relative;
+	z-index: 2;
+}
+.win-glyph-shadow {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	font-family: inherit;
+	font-size: 11rem;
+	font-weight: 900;
+	line-height: 1;
+	color: rgba(214, 168, 107, 0.18);
+	z-index: 1;
+	filter: blur(18px);
+	animation: win-glyph-glow 2.4s 0.6s ease-in-out infinite alternate;
+}
+@keyframes win-glyph-rise {
+	0%   { transform: scale(0.2) rotate(-12deg); opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+	60%  { transform: scale(1.18) rotate(2deg);  opacity: 1; }
+	100% { transform: scale(1.0)  rotate(0);     opacity: 1; }
+}
+@keyframes win-glyph-shimmer {
+	0%, 100% { background-position:   0% 50%; }
+	50%      { background-position: 100% 50%; }
+}
+@keyframes win-glyph-glow {
+	from { opacity: 0.65; transform: scale(1); }
+	to   { opacity: 1.0;  transform: scale(1.08); }
+}
+
+/* Loss styling — colder palette */
+.win-loss .win-glyph {
+	background: linear-gradient(135deg,
+		#d8d8e0 0%,
+		#9aa1b3 30%,
+		#5b637a 50%,
+		#7a8298 70%,
+		#d8d8e0 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+	filter: drop-shadow(0 4px 12px rgba(120, 130, 160, 0.4))
+	        drop-shadow(0 0 32px rgba(120, 130, 160, 0.2));
+}
+.win-loss .win-glyph-shadow {
+	color: rgba(150, 160, 180, 0.18);
+}
+
+/* Draw — neutral parchment */
+.win-draw .win-glyph {
+	background: linear-gradient(135deg,
+		#f0e6d0 0%,
+		#c8b58c 50%,
+		#f0e6d0 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+}
+
+.win-subtitle {
+	font-size: 1.1rem;
+	color: var(--ink);
+	letter-spacing: 0.1em;
+	margin-top: 0.2rem;
+}
+.win-reason {
+	font-size: 0.85rem;
+	color: var(--ink-mute);
+	font-family: ui-sans-serif, system-ui, sans-serif;
+	letter-spacing: 0.04em;
+}
+
+.win-score {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin-top: 0.6rem;
+	padding: 0.7rem 0.8rem;
+	background: rgba(20, 14, 8, 0.4);
+	border: 1px solid var(--line-soft);
+	border-radius: var(--radius);
+	font-family: ui-sans-serif, system-ui, sans-serif;
+	color: var(--ink-soft);
+}
+.win-score-row {
+	display: grid;
+	grid-template-columns: 22px 1fr auto auto;
+	gap: 0.6rem;
+	align-items: center;
+	font-size: 0.92rem;
+	padding: 0.15rem 0.1rem;
+}
+.win-score-row.leading {
+	color: var(--ink);
+	font-weight: 600;
+}
+.win-stone {
+	width: 18px; height: 18px;
+	border-radius: 50%;
+	border: 1px solid var(--line);
+}
+.win-stone-black { background: #0a0a0a; }
+.win-stone-white { background: #f8f4ed; }
+.win-score-name { text-align: left; overflow: hidden; text-overflow: ellipsis; }
+.win-score-me { color: var(--accent); font-weight: 600; }
+.win-score-cells { font-feature-settings: "tnum"; }
+.win-score-pct { font-feature-settings: "tnum"; min-width: 4ch; text-align: right; color: var(--ink-soft); }
+.win-score-row.leading .win-score-pct { color: var(--accent); }
+
+.win-actions {
+	display: flex;
+	gap: 0.6rem;
+	margin-top: 0.8rem;
+	width: 100%;
+	justify-content: center;
+}
+.win-actions .btn { min-width: 7rem; }
+
 /* Touch magnifier — appears above the finger during press-drag placement */
 .touch-loupe {
 	position: fixed;
