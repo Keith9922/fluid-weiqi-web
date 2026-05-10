@@ -13,7 +13,9 @@ import {
 } from "@fluid/core";
 import { AI_LABELS } from "@fluid/core";
 import { BoardRenderer, PLAYER_STYLES } from "./render.ts";
+import { TouchLoupe } from "./TouchLoupe.tsx";
 import { Tutorial, shouldShowTutorial } from "./Tutorial.tsx";
+import { detectDevice } from "./device.ts";
 
 export type GameProps = {
 	roomCode: string;
@@ -75,7 +77,17 @@ export function Game(props: GameProps) {
 
 	const [hover, setHover] = useState<Vec2 | null>(null);
 	const [shiftHeld, setShiftHeld] = useState(false);
+	const [touchDragging, setTouchDragging] = useState(false);
+	const [touchLoupePx, setTouchLoupePx] = useState<{ x: number; y: number } | null>(null);
 	const [showTutorial, setShowTutorial] = useState(() => shouldShowTutorial());
+	const touchStateRef = useRef<{
+		pointerId: number;
+		startClientX: number;
+		startClientY: number;
+		startTime: number;
+		dragMode: boolean;
+		dragTimer: number | null;
+	} | null>(null);
 	const myTurn = matchStarted && !flow.isEnded && flow.currentPlayerIndex === myPlayerIndex;
 
 	useEffect(() => {
@@ -125,34 +137,24 @@ export function Game(props: GameProps) {
 		};
 	}, []);
 
-	function eventToBoardPoint(e: React.MouseEvent<HTMLCanvasElement>): Vec2 | null {
+	function eventToBoardPoint(
+		clientX: number,
+		clientY: number,
+		canvas: HTMLCanvasElement,
+	): Vec2 | null {
 		const r = rendererRef.current;
 		if (!r) return null;
-		const rect = e.currentTarget.getBoundingClientRect();
-		const px = ((e.clientX - rect.left) / rect.width) * BOARD_PX;
-		const py = ((e.clientY - rect.top) / rect.height) * BOARD_PX;
+		const rect = canvas.getBoundingClientRect();
+		const px = ((clientX - rect.left) / rect.width) * BOARD_PX;
+		const py = ((clientY - rect.top) / rect.height) * BOARD_PX;
 		return r.pxToBoard({ x: px, y: py });
 	}
 
 	function snapPoint(p: Vec2): Vec2 {
-		if (shiftHeld) return p;
 		return { x: Math.round(p.x), y: Math.round(p.y) };
 	}
 
-	const handleMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-		if (!myTurn) return;
-		const raw = eventToBoardPoint(e);
-		if (!raw) return;
-		setHover(snapPoint(raw));
-	};
-
-	const handleLeave = () => setHover(null);
-
-	const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-		if (!myTurn) return;
-		const raw = eventToBoardPoint(e);
-		if (!raw) return;
-		const point = snapPoint(raw);
+	function placeAt(point: Vec2): void {
 		if (!inBounds(point, board)) return;
 		onAction({
 			playerIndex: myPlayerIndex,
@@ -161,6 +163,141 @@ export function Game(props: GameProps) {
 			turnSeq: flow.turnSeq,
 			actionSeq: 0,
 		});
+	}
+
+	const TAP_MAX_MOVE_PX = 14;
+	const DRAG_HOLD_MS = 180;
+
+	const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+		if (!myTurn) return;
+		const isTouchLike = e.pointerType === "touch" || e.pointerType === "pen";
+
+		if (!isTouchLike) {
+			// Mouse: legacy click-to-place behavior happens on pointerup.
+			return;
+		}
+
+		// Touch / pen: start tap-vs-drag tracking.
+		e.currentTarget.setPointerCapture(e.pointerId);
+		const dragTimer = window.setTimeout(() => {
+			// Held long enough → enter drag mode.
+			const st = touchStateRef.current;
+			if (!st || st.dragMode) return;
+			st.dragMode = true;
+			setTouchDragging(true);
+			if ("vibrate" in navigator) navigator.vibrate(10);
+			// Fire current preview at finger position.
+			const raw = eventToBoardPoint(st.startClientX, st.startClientY, e.currentTarget);
+			if (raw) {
+				setHover(raw);
+				setTouchLoupePx({ x: st.startClientX, y: st.startClientY });
+			}
+		}, DRAG_HOLD_MS);
+
+		touchStateRef.current = {
+			pointerId: e.pointerId,
+			startClientX: e.clientX,
+			startClientY: e.clientY,
+			startTime: Date.now(),
+			dragMode: false,
+			dragTimer,
+		};
+	};
+
+	const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+		if (!myTurn) return;
+		const isTouchLike = e.pointerType === "touch" || e.pointerType === "pen";
+
+		if (!isTouchLike) {
+			// Mouse: hover preview as user moves.
+			const raw = eventToBoardPoint(e.clientX, e.clientY, e.currentTarget);
+			if (!raw) return;
+			setHover(shiftHeld ? raw : snapPoint(raw));
+			return;
+		}
+
+		// Touch / pen.
+		const st = touchStateRef.current;
+		if (!st || st.pointerId !== e.pointerId) return;
+
+		if (!st.dragMode) {
+			// Have we moved far enough to count as a drag (vs tap)?
+			const dx = e.clientX - st.startClientX;
+			const dy = e.clientY - st.startClientY;
+			if (dx * dx + dy * dy > TAP_MAX_MOVE_PX * TAP_MAX_MOVE_PX) {
+				if (st.dragTimer !== null) clearTimeout(st.dragTimer);
+				st.dragTimer = null;
+				st.dragMode = true;
+				setTouchDragging(true);
+				if ("vibrate" in navigator) navigator.vibrate(10);
+			} else {
+				return;
+			}
+		}
+
+		// In drag mode: live preview at finger (no snap).
+		const raw = eventToBoardPoint(e.clientX, e.clientY, e.currentTarget);
+		if (!raw) return;
+		setHover(raw);
+		setTouchLoupePx({ x: e.clientX, y: e.clientY });
+	};
+
+	const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+		if (!myTurn) return;
+		const isTouchLike = e.pointerType === "touch" || e.pointerType === "pen";
+
+		if (!isTouchLike) {
+			// Mouse: place. Snap unless Shift held.
+			const raw = eventToBoardPoint(e.clientX, e.clientY, e.currentTarget);
+			if (!raw) return;
+			placeAt(shiftHeld ? raw : snapPoint(raw));
+			return;
+		}
+
+		// Touch / pen.
+		const st = touchStateRef.current;
+		if (!st || st.pointerId !== e.pointerId) return;
+		if (st.dragTimer !== null) clearTimeout(st.dragTimer);
+
+		const raw = eventToBoardPoint(e.clientX, e.clientY, e.currentTarget);
+		if (raw) {
+			if (st.dragMode) {
+				// Free placement at finger position.
+				placeAt(raw);
+			} else {
+				// Quick tap → snap to nearest grid intersection.
+				placeAt(snapPoint(raw));
+			}
+		}
+
+		touchStateRef.current = null;
+		setTouchDragging(false);
+		setTouchLoupePx(null);
+		setHover(null);
+		try {
+			e.currentTarget.releasePointerCapture(e.pointerId);
+		} catch {
+			// already released
+		}
+	};
+
+	const handlePointerCancel = (e: React.PointerEvent<HTMLCanvasElement>) => {
+		const st = touchStateRef.current;
+		if (st && st.dragTimer !== null) clearTimeout(st.dragTimer);
+		touchStateRef.current = null;
+		setTouchDragging(false);
+		setTouchLoupePx(null);
+		setHover(null);
+		try {
+			e.currentTarget.releasePointerCapture(e.pointerId);
+		} catch {
+			// ignore
+		}
+	};
+
+	const handlePointerLeave = (e: React.PointerEvent<HTMLCanvasElement>) => {
+		// Only clear hover for mouse — touch/pen state is owned by pointerup.
+		if (e.pointerType === "mouse") setHover(null);
 	};
 
 	const handlePass = () => {
@@ -223,14 +360,23 @@ export function Game(props: GameProps) {
 						width={BOARD_PX}
 						height={BOARD_PX}
 						style={{ width: BOARD_PX, height: BOARD_PX }}
-						onMouseMove={handleMove}
-						onMouseLeave={handleLeave}
-						onClick={handleClick}
+						onPointerDown={handlePointerDown}
+						onPointerMove={handlePointerMove}
+						onPointerUp={handlePointerUp}
+						onPointerCancel={handlePointerCancel}
+						onPointerLeave={handlePointerLeave}
 					/>
 					{captureToast && (
 						<div key={captureToast.id} className="capture-toast">
 							提子 +{captureToast.count}
 						</div>
+					)}
+					{touchDragging && touchLoupePx && (
+						<TouchLoupe
+							finger={touchLoupePx}
+							sourceCanvas={fluidRef.current}
+							boardCanvasRect={inputRef.current?.getBoundingClientRect() ?? null}
+						/>
 					)}
 				</div>
 
@@ -248,7 +394,9 @@ export function Game(props: GameProps) {
 						离开房间
 					</button>
 					<span className="game-controls-hint">
-						左键落子（吸附） · 按住 <kbd>Shift</kbd> 自由落子
+						{detectDevice() === "touch"
+							? "轻点落子（吸附） · 按住拖动 = 自由落子"
+							: <>左键落子（吸附） · 按住 <kbd>Shift</kbd> 自由落子</>}
 					</span>
 				</div>
 			</div>

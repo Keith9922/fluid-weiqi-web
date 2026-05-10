@@ -2,10 +2,11 @@
 // Three-step modal explaining the click model.
 
 import { useState } from "react";
+import { detectDevice } from "./device.ts";
 
 const STORAGE_KEY = "fluid-weiqi-tutorial-seen";
 
-const STEPS = [
+const DESKTOP_STEPS = [
 	{
 		title: "1 · 鼠标悬停",
 		body: "把鼠标移到棋盘上 —— 你会实时看到 \"如果落在这\"会形成什么样的色块。两颗同色子靠近时，色块会像水滴一样合并。",
@@ -17,6 +18,21 @@ const STEPS = [
 	{
 		title: "3 · Shift = 自由落子",
 		body: "按住 Shift 再点击，就不再吸附到网格 —— 这是\"液态围棋\"区别于传统围棋的关键特性，你可以下在任意连续位置。",
+	},
+];
+
+const TOUCH_STEPS = [
+	{
+		title: "1 · 轻点落子",
+		body: "想下在哪儿就点哪儿 —— 棋子会自动吸附到最近的格点。跟普通围棋一样直觉。",
+	},
+	{
+		title: "2 · 按住拖动 = 自由落子",
+		body: "想精确放在格点之间？手指按住别松，然后慢慢拖到想要的位置，松手就下了。这是\"液态围棋\"的关键玩法。",
+	},
+	{
+		title: "3 · 拖动时看放大镜",
+		body: "按住拖动时，手指上方会出现一个圆形放大镜，让你能精确看到棋子会落在哪 —— 不会被手指挡住。",
 	},
 ];
 
@@ -38,8 +54,9 @@ export function markTutorialSeen(): void {
 
 export function Tutorial({ onDone }: { onDone: () => void }) {
 	const [step, setStep] = useState(0);
-	const isLast = step === STEPS.length - 1;
-	const current = STEPS[step]!;
+	const steps = detectDevice() === "touch" ? TOUCH_STEPS : DESKTOP_STEPS;
+	const isLast = step === steps.length - 1;
+	const current = steps[step]!;
 
 	const close = () => {
 		markTutorialSeen();
@@ -50,7 +67,7 @@ export function Tutorial({ onDone }: { onDone: () => void }) {
 		<div className="tutorial-backdrop" onClick={close}>
 			<div className="tutorial-card" onClick={e => e.stopPropagation()}>
 				<div className="tutorial-progress">
-					{STEPS.map((_, i) => (
+					{steps.map((_, i) => (
 						<span key={i} className={`tutorial-dot${i === step ? " active" : ""}${i < step ? " done" : ""}`} />
 					))}
 				</div>

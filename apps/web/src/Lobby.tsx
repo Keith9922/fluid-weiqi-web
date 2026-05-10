@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AI_LABELS, DEFAULT_GAME_CONFIG, type AiLevel, type GameConfig } from "@fluid/core";
+import { detectDevice } from "./device.ts";
 
 export type LobbyProps = {
 	connecting: boolean;
@@ -32,7 +33,13 @@ export function Lobby({ connecting, error, onCreateOnline, onJoin, onCreateAi }:
 	const [code, setCode] = useState("");
 	const [aiLevel, setAiLevel] = useState<AiLevel>("medium");
 	const [humanFirst, setHumanFirst] = useState(true);
-	const [config, setConfig] = useState<GameConfig>(DEFAULT_GAME_CONFIG);
+	// On touch devices, recommend 13×13 by default — 19×19 cells would be
+	// roughly 17px on a 375px-wide phone, too cramped for finger placement.
+	const [config, setConfig] = useState<GameConfig>(() =>
+		detectDevice() === "touch"
+			? { ...DEFAULT_GAME_CONFIG, boardSize: 13 }
+			: DEFAULT_GAME_CONFIG,
+	);
 
 	const trimmedName = name.trim();
 	const trimmedCode = code.trim().toUpperCase();

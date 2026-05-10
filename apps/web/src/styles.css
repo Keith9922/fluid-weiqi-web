@@ -708,6 +708,12 @@ input:focus {
 .game-board canvas.input {
 	background: transparent;
 	cursor: crosshair;
+	/* Disable browser pan/zoom/double-tap on the play surface so finger
+	   gestures map cleanly to game actions. */
+	touch-action: none;
+	-webkit-user-select: none;
+	user-select: none;
+	-webkit-touch-callout: none;
 }
 
 /* Tutorial overlay (first-game-only) */
@@ -770,6 +776,28 @@ input:focus {
 	justify-content: space-between;
 	gap: 0.6rem;
 	margin-top: 0.4rem;
+}
+
+/* Touch magnifier — appears above the finger during press-drag placement */
+.touch-loupe {
+	position: fixed;
+	z-index: 80;
+	border-radius: 50%;
+	border: 2px solid var(--accent);
+	box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4);
+	pointer-events: none;
+	overflow: hidden;
+	background: #3a2f24;
+	animation: touch-loupe-in 0.18s ease-out;
+}
+.touch-loupe canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+@keyframes touch-loupe-in {
+	from { transform: scale(0.6); opacity: 0; }
+	to   { transform: scale(1.0); opacity: 1; }
 }
 
 /* Capture toast — overlays the board for ~2.5s */
