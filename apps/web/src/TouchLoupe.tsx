@@ -9,9 +9,9 @@
 
 import { useEffect, useRef } from "react";
 
-const LOUPE_SIZE = 92;        // CSS pixels
-const LOUPE_OFFSET_Y = 78;    // distance above the finger
-const ZOOM = 2.2;             // magnification factor
+const LOUPE_SIZE = 110;       // CSS pixels (bigger so 2-3 cells of context fit)
+const LOUPE_OFFSET_Y = 90;    // distance above the finger (larger loupe needs more clearance)
+const ZOOM = 1.5;             // magnification factor (lower = wider view, see merge with neighbors)
 
 export type TouchLoupeProps = {
 	finger: { x: number; y: number };          // viewport coordinates

@@ -177,21 +177,27 @@ export function Game(props: GameProps) {
 			return;
 		}
 
-		// Touch / pen: start tap-vs-drag tracking.
+		// Touch / pen: show loupe + snapped preview IMMEDIATELY for instant
+		// feedback. Drag-mode classification (tap vs press-drag) only changes
+		// whether the preview snaps; it doesn't gate the visual feedback.
 		e.currentTarget.setPointerCapture(e.pointerId);
+		if ("vibrate" in navigator) navigator.vibrate(8);
+
+		const raw = eventToBoardPoint(e.clientX, e.clientY, e.currentTarget);
+		if (raw) {
+			setHover(snapPoint(raw));
+			setTouchLoupePx({ x: e.clientX, y: e.clientY });
+			setTouchDragging(true);
+		}
+
+		// 180 ms later, if the finger has not moved enough to trigger drag
+		// already, switch from snapped preview to free preview at the finger.
 		const dragTimer = window.setTimeout(() => {
-			// Held long enough → enter drag mode.
 			const st = touchStateRef.current;
 			if (!st || st.dragMode) return;
 			st.dragMode = true;
-			setTouchDragging(true);
-			if ("vibrate" in navigator) navigator.vibrate(10);
-			// Fire current preview at finger position.
-			const raw = eventToBoardPoint(st.startClientX, st.startClientY, e.currentTarget);
-			if (raw) {
-				setHover(raw);
-				setTouchLoupePx({ x: st.startClientX, y: st.startClientY });
-			}
+			const rawNow = eventToBoardPoint(st.startClientX, st.startClientY, e.currentTarget);
+			if (rawNow) setHover(rawNow);
 		}, DRAG_HOLD_MS);
 
 		touchStateRef.current = {
@@ -228,17 +234,14 @@ export function Game(props: GameProps) {
 				if (st.dragTimer !== null) clearTimeout(st.dragTimer);
 				st.dragTimer = null;
 				st.dragMode = true;
-				setTouchDragging(true);
-				if ("vibrate" in navigator) navigator.vibrate(10);
-			} else {
-				return;
 			}
 		}
 
-		// In drag mode: live preview at finger (no snap).
+		// Always update the loupe + preview to follow the finger.
+		// Snap until drag mode kicks in, then track raw finger position.
 		const raw = eventToBoardPoint(e.clientX, e.clientY, e.currentTarget);
 		if (!raw) return;
-		setHover(raw);
+		setHover(st.dragMode ? raw : snapPoint(raw));
 		setTouchLoupePx({ x: e.clientX, y: e.clientY });
 	};
 

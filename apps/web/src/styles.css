@@ -793,7 +793,8 @@ input:focus {
 	pointer-events: none;
 	overflow: hidden;
 	background: #3a2f24;
-	animation: touch-loupe-in 0.18s ease-out;
+	/* Snappy entrance — appears almost the moment the finger lands */
+	animation: touch-loupe-in 0.08s ease-out;
 }
 .touch-loupe canvas {
 	display: block;
@@ -801,7 +802,7 @@ input:focus {
 	height: 100%;
 }
 @keyframes touch-loupe-in {
-	from { transform: scale(0.6); opacity: 0; }
+	from { transform: scale(0.85); opacity: 0; }
 	to   { transform: scale(1.0); opacity: 1; }
 }
 
