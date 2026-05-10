@@ -242,19 +242,33 @@ export class FluidRenderer {
 		gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 	}
 
-	render(board: BoardSnapshot, padRatio: number = 0): void {
+	render(
+		board: BoardSnapshot,
+		padRatio: number = 0,
+		previewStone?: { x: number; y: number; strength: number; playerIndex: number } | null,
+	): void {
 		const gl = this.gl;
 		gl.useProgram(this.program);
 		gl.bindVertexArray(this.vao);
 
 		const data = new Float32Array(MAX_STONES * 4);
-		const count = Math.min(MAX_STONES, board.stones.length);
+		let count = Math.min(MAX_STONES, board.stones.length);
 		for (let i = 0; i < count; ++i) {
 			const s = board.stones[i]!;
 			data[i * 4 + 0] = s.position.x;
 			data[i * 4 + 1] = s.position.y;
 			data[i * 4 + 2] = s.strength;
 			data[i * 4 + 3] = s.playerIndex + 1;
+		}
+		// Append the hover preview as if it were a real stone. The level set
+		// recomputes immediately, so the user can see merge/contest effects
+		// before clicking.
+		if (previewStone && count < MAX_STONES) {
+			data[count * 4 + 0] = previewStone.x;
+			data[count * 4 + 1] = previewStone.y;
+			data[count * 4 + 2] = previewStone.strength;
+			data[count * 4 + 3] = previewStone.playerIndex + 1;
+			count++;
 		}
 		gl.activeTexture(gl.TEXTURE0);
 		gl.bindTexture(gl.TEXTURE_2D, this.stoneTex);

@@ -32,6 +32,7 @@ export function App() {
 	const [error, setError] = useState<string | null>(null);
 	const [rejection, setRejection] = useState<string | null>(null);
 	const [aiThinking, setAiThinking] = useState(false);
+	const [captureToast, setCaptureToast] = useState<{ id: number; count: number } | null>(null);
 	const [theme, setTheme] = useState<Theme>(() => getInitialTheme());
 
 	useEffect(() => {
@@ -56,6 +57,9 @@ export function App() {
 				setRoom(prev => prev ? { ...prev, snapshot: msg.snapshot } : prev);
 				setRejection(null);
 				setAiThinking(false);
+				if (msg.captured > 0) {
+					setCaptureToast({ id: Date.now(), count: msg.captured });
+				}
 				break;
 			case "actionRejected":
 				setRoom(prev => prev ? { ...prev, snapshot: msg.snapshot } : prev);
@@ -189,6 +193,8 @@ export function App() {
 						gameConfig={room.gameConfig ?? DEFAULT_GAME_CONFIG}
 						rejection={rejection}
 						aiThinking={aiThinking}
+						captureToast={captureToast}
+						onCaptureToastDone={() => setCaptureToast(null)}
 						onAction={onAction}
 						onLeave={onLeave}
 					/>

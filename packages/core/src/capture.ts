@@ -15,7 +15,7 @@
 //     stone.
 
 import type { BoardState } from "./board.ts";
-import { dominantPlayerAt } from "./influence.ts";
+import { territoryOwnerAt } from "./influence.ts";
 import type { StonePlacement, Vec2 } from "./types.ts";
 
 export type AnalysisGrid = {
@@ -48,7 +48,9 @@ export function buildAnalysis(
 				x: min.x + (i + 0.5) * cellSize,
 				y: min.y + (j + 0.5) * cellSize,
 			};
-			territory[j * resolution + i] = dominantPlayerAt(point, stones, board.stoneHardness);
+			// Match upstream BoardDistribution.compute / CSTerritory:
+			// a cell only has an owner when total influence >= 1.0.
+			territory[j * resolution + i] = territoryOwnerAt(point, stones, board.stoneHardness);
 		}
 	}
 
@@ -119,21 +121,17 @@ export function computeChainStats(grid: AnalysisGrid): Map<number, ChainStat> {
 
 		if (stat.hasLiberty) continue;
 
+		// Match upstream CSAccumulateChainStats: out-of-bounds neighbors are
+		// SKIPPED (they do not grant liberty). Only an in-bounds neutral
+		// neighbor counts as a liberty.
 		const x = idx % n;
 		const y = (idx - x) / n;
-		const neighbors = [
-			x > 0     ? idx - 1 : -2,
-			x < n - 1 ? idx + 1 : -2,
-			y > 0     ? idx - n : -2,
-			y < n - 1 ? idx + n : -2,
-		];
+		const neighbors: number[] = [];
+		if (x > 0)     neighbors.push(idx - 1);
+		if (x < n - 1) neighbors.push(idx + 1);
+		if (y > 0)     neighbors.push(idx - n);
+		if (y < n - 1) neighbors.push(idx + n);
 		for (const nIdx of neighbors) {
-			if (nIdx === -2) {
-				// Out-of-bounds: counts as liberty (matches the playable margin
-				// which is rendered as neutral).
-				stat.hasLiberty = true;
-				break;
-			}
 			if (territory[nIdx]! < 0) {
 				stat.hasLiberty = true;
 				break;

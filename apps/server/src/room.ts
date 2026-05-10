@@ -138,10 +138,10 @@ function randomCode(): string {
 }
 
 const AI_DISPLAY: Record<AiLevel, string> = {
-	easy:   "AI · 简单",
-	medium: "AI · 中级",
-	hard:   "AI · 困难",
-	hell:   "AI · 地狱",
+	easy:   "老宋",
+	medium: "老王",
+	hard:   "老李",
+	hell:   "老黑",
 };
 function aiName(level: AiLevel): string {
 	return AI_DISPLAY[level];

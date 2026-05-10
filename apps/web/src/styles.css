@@ -326,13 +326,25 @@ input:focus {
 	background: linear-gradient(180deg, var(--bg-elev-2) 0%, var(--bg-elev) 100%);
 	box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-sm);
 }
+.ai-card-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin-bottom: 0.45rem;
+}
+.ai-card-name {
+	font-size: 1.05rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	color: var(--ink);
+}
 .ai-card-badge {
 	display: inline-block;
-	font-size: 0.78rem;
+	font-size: 0.74rem;
 	font-weight: 600;
-	padding: 0.2rem 0.55rem;
+	padding: 0.16rem 0.5rem;
 	border-radius: 999px;
-	margin-bottom: 0.4rem;
 	letter-spacing: 0.04em;
 }
 .ai-easy   { background: rgba(126, 184, 125, 0.18); color: #a6d3a5; }
@@ -497,6 +509,26 @@ input:focus {
 	.game { grid-template-columns: 1fr; }
 }
 
+/* On phone widths, the lobby's primary action sticks to the bottom of the
+   viewport so the user never has to scroll to find "开始对局". */
+@media (max-width: 600px) {
+	.lobby-panel > .btn.primary {
+		position: fixed;
+		left: 50%;
+		transform: translateX(-50%);
+		bottom: 1rem;
+		width: min(440px, calc(100vw - 2rem));
+		z-index: 50;
+		box-shadow: var(--shadow-lg);
+	}
+	.lobby-panel {
+		padding-bottom: 4rem;
+	}
+	.app-main {
+		padding-bottom: 5.5rem;
+	}
+}
+
 .game-rail {
 	display: flex;
 	flex-direction: column;
@@ -577,6 +609,14 @@ input:focus {
 }
 .player-tag-me { background: var(--accent-soft); color: var(--accent); }
 .player-tag-ai { background: rgba(74, 142, 192, 0.15); color: #7ab1d4; }
+.player-aka {
+	font-size: 0.74rem;
+	color: var(--ink-mute);
+	font-family: ui-sans-serif, system-ui, sans-serif;
+	margin-top: 0.1rem;
+	letter-spacing: 0.02em;
+}
+
 .player-meta {
 	display: flex;
 	gap: 0.7rem;
@@ -669,6 +709,142 @@ input:focus {
 	background: transparent;
 	cursor: crosshair;
 }
+
+/* Tutorial overlay (first-game-only) */
+.tutorial-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(10, 7, 4, 0.65);
+	backdrop-filter: blur(4px);
+	display: grid;
+	place-items: center;
+	z-index: 100;
+	animation: tutorial-fade 0.3s ease;
+}
+@keyframes tutorial-fade { from { opacity: 0 } to { opacity: 1 } }
+.tutorial-card {
+	background: var(--bg-elev);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-lg);
+	padding: 1.6rem 1.8rem 1.4rem;
+	width: min(440px, 92vw);
+	box-shadow: var(--shadow-lg);
+	display: flex;
+	flex-direction: column;
+	gap: 0.9rem;
+	animation: tutorial-slide 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes tutorial-slide {
+	from { transform: translateY(20px); opacity: 0 }
+	to   { transform: translateY(0); opacity: 1 }
+}
+.tutorial-progress {
+	display: flex;
+	gap: 0.4rem;
+	justify-content: center;
+	margin-bottom: 0.3rem;
+}
+.tutorial-dot {
+	width: 22px;
+	height: 4px;
+	border-radius: 2px;
+	background: var(--line-soft);
+	transition: background 0.2s, width 0.2s;
+}
+.tutorial-dot.done   { background: var(--accent-2); }
+.tutorial-dot.active { background: var(--accent); width: 32px; }
+.tutorial-card h3 {
+	margin: 0;
+	font-size: 1.2rem;
+	color: var(--ink);
+}
+.tutorial-card p {
+	margin: 0;
+	color: var(--ink-soft);
+	font-size: 0.95rem;
+	line-height: 1.6;
+	font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.tutorial-actions {
+	display: flex;
+	justify-content: space-between;
+	gap: 0.6rem;
+	margin-top: 0.4rem;
+}
+
+/* Capture toast — overlays the board for ~2.5s */
+.capture-toast {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: rgba(20, 14, 8, 0.85);
+	color: var(--accent);
+	font-size: 1.6rem;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	padding: 0.7rem 1.6rem;
+	border-radius: 999px;
+	border: 1px solid rgba(214, 168, 107, 0.5);
+	pointer-events: none;
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+	animation: capture-toast-pop 2.5s ease forwards;
+}
+@keyframes capture-toast-pop {
+	0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+	14%  { transform: translate(-50%, -50%) scale(1.18); opacity: 1; }
+	22%  { transform: translate(-50%, -50%) scale(1.0); }
+	78%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+	100% { opacity: 0; transform: translate(-50%, -55%) scale(0.95); }
+}
+
+/* Territory percentage bar under the board */
+.territory-bar {
+	width: 100%;
+	max-width: 640px;
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+}
+.territory-meter {
+	display: flex;
+	height: 14px;
+	border-radius: 999px;
+	overflow: hidden;
+	background: var(--bg-elev);
+	border: 1px solid var(--line-soft);
+	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.territory-fill {
+	height: 100%;
+	transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.territory-black   { background: linear-gradient(90deg, #0a0a0a 0%, #2a2620 100%); }
+.territory-white   { background: linear-gradient(90deg, #d8c9a8 0%, #f8f4ed 100%); }
+.territory-neutral { background: transparent; }
+.territory-legend {
+	display: flex;
+	justify-content: space-between;
+	gap: 0.7rem;
+	font-size: 0.78rem;
+	color: var(--ink-mute);
+	font-family: ui-sans-serif, system-ui, sans-serif;
+	font-feature-settings: "tnum";
+}
+.legend-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+.legend-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 1px solid var(--line);
+}
+.legend-black .legend-dot   { background: #0a0a0a; }
+.legend-white .legend-dot   { background: #f8f4ed; }
+.legend-neutral .legend-dot { background: var(--bg-elev); }
 
 .game-controls {
 	display: flex;

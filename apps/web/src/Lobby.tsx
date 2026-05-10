@@ -14,10 +14,16 @@ type Tab = "online" | "ai";
 const BOARD_SIZES = [9, 13, 19] as const;
 const AI_LEVELS: AiLevel[] = ["easy", "medium", "hard", "hell"];
 const AI_DESCRIPTION: Record<AiLevel, string> = {
-	easy:   "随机落子，会避开自杀。新手陪练。",
-	medium: "1-ply 启发式，会算提子和大局。普通玩家有得拼。",
-	hard:   "深度 3 minimax + α-β 剪枝。casual 玩家很难赢。",
-	hell:   "MCTS + 启发式 rollout。每手思考 5-10 秒。准备好了吗？",
+	easy:   "完全新手。随便下、不会算 —— 适合第一次摸索游戏的人。",
+	medium: "会算一步。看到能提你的子就提，会避免送子。普通玩家有得拼。",
+	hard:   "会算三步。看得见对杀机会，casual 玩家很难赢。",
+	hell:   "深度搜索老手。每手要想 5-10 秒。挑战自我用，慎入。",
+};
+const AI_TAGLINE: Record<AiLevel, string> = {
+	easy:   "陪练",
+	medium: "对手",
+	hard:   "高手",
+	hell:   "强敌",
 };
 
 export function Lobby({ connecting, error, onCreateOnline, onJoin, onCreateAi }: LobbyProps) {
@@ -62,7 +68,10 @@ export function Lobby({ connecting, error, onCreateOnline, onJoin, onCreateAi }:
 								className={`ai-card${aiLevel === level ? " selected" : ""}`}
 								onClick={() => setAiLevel(level)}
 							>
-								<div className={`ai-card-badge ai-${level}`}>{AI_LABELS[level].zh}</div>
+								<div className="ai-card-head">
+									<span className="ai-card-name">{AI_LABELS[level].persona}</span>
+									<span className={`ai-card-badge ai-${level}`}>{AI_TAGLINE[level]}</span>
+								</div>
 								<div className="ai-card-desc">{AI_DESCRIPTION[level]}</div>
 							</button>
 						))}

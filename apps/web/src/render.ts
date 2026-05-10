@@ -29,12 +29,19 @@ export type BoardCanvases = {
 	preview: HTMLCanvasElement;
 };
 
+export type HoverPreview = {
+	position: Vec2;
+	playerIndex: number;
+	strength: number;
+};
+
 export class BoardRenderer {
 	readonly canvases: BoardCanvases;
 	private fluid: FluidRenderer;
 	private pixelSize: number;
 	private rafId: number | null = null;
 	private currentBoard: BoardSnapshot | null = null;
+	private hoverPreview: HoverPreview | null = null;
 
 	constructor(canvases: BoardCanvases, pixelSize: number) {
 		this.canvases = canvases;
@@ -60,9 +67,14 @@ export class BoardRenderer {
 		this.startAnimation();
 	}
 
-	setHover(point: Vec2 | null, playerIndex: number, valid: boolean): void {
+	setHover(point: Vec2 | null, playerIndex: number, valid: boolean, strength = 1): void {
 		if (!this.currentBoard) return;
 		this.drawPreview(this.currentBoard, point, playerIndex, valid);
+		// The fluid layer also gets a "what-if" stone so the level set updates
+		// in real time as the cursor moves.
+		this.hoverPreview = (point && valid)
+			? { position: point, playerIndex, strength }
+			: null;
 	}
 
 	pxToBoard(p: Vec2): Vec2 {
@@ -85,7 +97,21 @@ export class BoardRenderer {
 	private startAnimation(): void {
 		if (this.rafId !== null) return;
 		const tick = () => {
-			if (this.currentBoard) this.fluid.render(this.currentBoard, PADDING_RATIO);
+			if (this.currentBoard) {
+				const preview = this.hoverPreview;
+				this.fluid.render(
+					this.currentBoard,
+					PADDING_RATIO,
+					preview
+						? {
+							x: preview.position.x,
+							y: preview.position.y,
+							strength: preview.strength,
+							playerIndex: preview.playerIndex,
+						}
+						: null,
+				);
+			}
 			this.rafId = requestAnimationFrame(tick);
 		};
 		this.rafId = requestAnimationFrame(tick);

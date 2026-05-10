@@ -1,9 +1,10 @@
 // Game screen — renders the board, handles input, displays player/turn UI.
 // Uses the new BoardRenderer (WebGL fluid + Canvas2D overlay).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-	type AiLevel,
+	BoardState,
+	buildAnalysis,
 	type GameConfig,
 	type MatchActionRequest,
 	type MatchSnapshot,
@@ -12,6 +13,7 @@ import {
 } from "@fluid/core";
 import { AI_LABELS } from "@fluid/core";
 import { BoardRenderer, PLAYER_STYLES } from "./render.ts";
+import { Tutorial, shouldShowTutorial } from "./Tutorial.tsx";
 
 export type GameProps = {
 	roomCode: string;
@@ -22,6 +24,8 @@ export type GameProps = {
 	gameConfig: GameConfig;
 	rejection: string | null;
 	aiThinking: boolean;
+	captureToast: { id: number; count: number } | null;
+	onCaptureToastDone: () => void;
 	onAction: (req: MatchActionRequest) => void;
 	onLeave: () => void;
 };
@@ -31,10 +35,37 @@ const BOARD_PX = 640;
 export function Game(props: GameProps) {
 	const {
 		snapshot, myPlayerIndex, matchStarted, players, gameConfig,
-		rejection, aiThinking, onAction, onLeave, roomCode,
+		rejection, aiThinking, captureToast, onCaptureToastDone,
+		onAction, onLeave, roomCode,
 	} = props;
 	const board = snapshot.board;
 	const flow = snapshot.flow;
+
+	// Real-time territory percentage from the same analysis grid the engine
+	// uses for capture (downsampled influence sum, threshold = 1).
+	const territory = useMemo(() => {
+		if (board.stones.length === 0) return { p0: 0, p1: 0, neutral: 100 };
+		const liveBoard = BoardState.fromSnapshot(board);
+		const grid = buildAnalysis(liveBoard, 48);
+		let p0 = 0, p1 = 0, total = grid.territory.length;
+		for (let i = 0; i < total; ++i) {
+			const owner = grid.territory[i] ?? -1;
+			if (owner === 0) p0++;
+			else if (owner === 1) p1++;
+		}
+		return {
+			p0: (p0 / total) * 100,
+			p1: (p1 / total) * 100,
+			neutral: ((total - p0 - p1) / total) * 100,
+		};
+	}, [board]);
+
+	// Capture toast auto-dismiss
+	useEffect(() => {
+		if (!captureToast) return;
+		const t = setTimeout(onCaptureToastDone, 2500);
+		return () => clearTimeout(t);
+	}, [captureToast, onCaptureToastDone]);
 
 	const fluidRef = useRef<HTMLCanvasElement | null>(null);
 	const overlayRef = useRef<HTMLCanvasElement | null>(null);
@@ -44,6 +75,7 @@ export function Game(props: GameProps) {
 
 	const [hover, setHover] = useState<Vec2 | null>(null);
 	const [shiftHeld, setShiftHeld] = useState(false);
+	const [showTutorial, setShowTutorial] = useState(() => shouldShowTutorial());
 	const myTurn = matchStarted && !flow.isEnded && flow.currentPlayerIndex === myPlayerIndex;
 
 	useEffect(() => {
@@ -75,11 +107,11 @@ export function Game(props: GameProps) {
 		const r = rendererRef.current;
 		if (!r) return;
 		if (!myTurn || !hover || !inBounds(hover, board)) {
-			r.setHover(null, myPlayerIndex, true);
+			r.setHover(null, myPlayerIndex, true, gameConfig.stoneStrength);
 			return;
 		}
-		r.setHover(hover, myPlayerIndex, true);
-	}, [hover, myTurn, board, myPlayerIndex]);
+		r.setHover(hover, myPlayerIndex, true, gameConfig.stoneStrength);
+	}, [hover, myTurn, board, myPlayerIndex, gameConfig.stoneStrength]);
 
 	// Track Shift for free placement.
 	useEffect(() => {
@@ -148,6 +180,7 @@ export function Game(props: GameProps) {
 
 	return (
 		<div className="game">
+			{showTutorial && <Tutorial onDone={() => setShowTutorial(false)} />}
 			<div className="game-rail">
 				<RoomBadge code={roomCode} />
 				{players.map((p, i) => (
@@ -194,7 +227,18 @@ export function Game(props: GameProps) {
 						onMouseLeave={handleLeave}
 						onClick={handleClick}
 					/>
+					{captureToast && (
+						<div key={captureToast.id} className="capture-toast">
+							提子 +{captureToast.count}
+						</div>
+					)}
 				</div>
+
+				<TerritoryBar
+					p0={territory.p0}
+					p1={territory.p1}
+					neutral={territory.neutral}
+				/>
 
 				<div className="game-controls">
 					<button className="btn secondary" onClick={handlePass} disabled={!myTurn}>
@@ -253,6 +297,9 @@ function PlayerCard({
 						<span className="player-tag-ai">{AI_LABELS[player.aiLevel].zh}</span>
 					)}
 				</div>
+				{player.isAi && player.aiLevel && (
+					<div className="player-aka">代号 · {AI_LABELS[player.aiLevel].persona}</div>
+				)}
 				<div className="player-meta">
 					<span>{stoneCount} 子</span>
 					{aiThinking && <span className="ai-thinking">思考中…</span>}
@@ -289,5 +336,22 @@ function inBounds(p: Vec2, board: { size: number; shrinkMargin: number }): boole
 		p.x <= board.size - board.shrinkMargin &&
 		p.y >= board.shrinkMargin &&
 		p.y <= board.size - board.shrinkMargin
+	);
+}
+
+function TerritoryBar({ p0, p1, neutral }: { p0: number; p1: number; neutral: number }) {
+	return (
+		<div className="territory-bar">
+			<div className="territory-meter" aria-label="占地比例">
+				<div className="territory-fill territory-black" style={{ width: `${p0}%` }} />
+				<div className="territory-fill territory-neutral" style={{ width: `${neutral}%` }} />
+				<div className="territory-fill territory-white" style={{ width: `${p1}%` }} />
+			</div>
+			<div className="territory-legend">
+				<span className="legend-item legend-black"><span className="legend-dot" />黑 {p0.toFixed(0)}%</span>
+				<span className="legend-item legend-neutral"><span className="legend-dot" />空地 {neutral.toFixed(0)}%</span>
+				<span className="legend-item legend-white"><span className="legend-dot" />白 {p1.toFixed(0)}%</span>
+			</div>
+		</div>
 	);
 }

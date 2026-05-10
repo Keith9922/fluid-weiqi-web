@@ -45,6 +45,11 @@ export function influenceForPlayerAt(
 
 // Index of the dominant player at this point, or -1 if no player has any
 // influence here (territory is "neutral").
+//
+// This is the *visualization*-style answer (any non-trivial influence wins),
+// useful for showing dominance ramps. For the capture rule, use
+// `territoryOwnerAt`, which matches the upstream BoardDistribution.compute
+// CSTerritory threshold of total >= 1.
 export function dominantPlayerAt(
 	point: Vec2,
 	stonesByPlayer: readonly (readonly StonePlacement[])[],
@@ -63,4 +68,37 @@ export function dominantPlayerAt(
 		}
 	}
 	return bestPlayer;
+}
+
+// CAPTURE-grade ownership: a cell only "belongs" to a player when the SUM
+// of all players' influences at this point exceeds the visual threshold of
+// 1.0. Below 1.0 the cell is neutral (returns -1). At or above 1.0 it goes
+// to the player with the largest individual influence. This mirrors
+// BoardDistribution.compute / CSTerritory line 242:
+//     bool occupied = totalDensity >= 1.0 && owner < _PlayerCount;
+//
+// The visualization layer renders a SOLID blob exactly where this returns
+// a non-negative owner — so what the user sees as "owned" matches what the
+// capture engine treats as "owned".
+export const TERRITORY_THRESHOLD = 1.0;
+
+export function territoryOwnerAt(
+	point: Vec2,
+	stonesByPlayer: readonly (readonly StonePlacement[])[],
+	hardness: number,
+): number {
+	let total = 0;
+	let bestPlayer = -1;
+	let bestValue = 0;
+	for (let p = 0; p < stonesByPlayer.length; ++p) {
+		const stones = stonesByPlayer[p];
+		if (!stones || stones.length === 0) continue;
+		const v = influenceForPlayerAt(point, stones, hardness);
+		total += v;
+		if (v > bestValue) {
+			bestValue = v;
+			bestPlayer = p;
+		}
+	}
+	return total >= TERRITORY_THRESHOLD ? bestPlayer : -1;
 }
