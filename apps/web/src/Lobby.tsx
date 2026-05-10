@@ -14,10 +14,10 @@ type Tab = "online" | "ai";
 const BOARD_SIZES = [9, 13, 19] as const;
 const AI_LEVELS: AiLevel[] = ["easy", "medium", "hard", "hell"];
 const AI_DESCRIPTION: Record<AiLevel, string> = {
-	easy:   "完全新手。随便下、不会算 —— 适合第一次摸索游戏的人。",
-	medium: "会算一步。看到能提你的子就提，会避免送子。普通玩家有得拼。",
-	hard:   "会算三步。看得见对杀机会，casual 玩家很难赢。",
-	hell:   "深度搜索老手。每手要想 5-10 秒。挑战自我用，慎入。",
+	easy:   "刚学棋的朋友，落子随意，不会刁难你。第一次摸游戏可以选这个。",
+	medium: "正经棋友，能跟你来回攻防，输赢看实力发挥。",
+	hard:   "老练的对手，看得见全局，赢他得花点心思。",
+	hell:   "深藏不露的高手，每手都要琢磨好一会儿。挑战自我用，慎入。",
 };
 const AI_TAGLINE: Record<AiLevel, string> = {
 	easy:   "陪练",
