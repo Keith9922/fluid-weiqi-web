@@ -1,20 +1,24 @@
-// Hard AI — minimax with α-β pruning and iterative deepening.
+// Hard AI — minimax with α-β pruning, iterative deepening, **free placement**.
 //
 // Search structure:
-//   - Move ordering: top-K candidates from quickPriorScore (cuts branching ~10x)
-//   - Depth 2 first; if time budget remains, deepen to depth 3.
-//   - Leaf eval uses the cheaper evaluateFast.
-//   - Hard time budget keeps total search under ~3 seconds on a 2-core box.
+//   - Candidates include OFF-grid positions (half-grid + surround spots
+//     around opponent stones + wedge midpoints). This lets the AI play moves
+//     a snap-to-grid AI literally cannot reach — critical in Fluid Weiqi
+//     where the killing position is often (x.5, y.5).
+//   - Move ordering: top-K from quickPriorScore (3-surround aware).
+//   - Iterative deepening: depth 2 → 3 → 4 as time allows.
+//   - Leaf eval uses evaluateFast (24×24 grid).
+//   - Hard time budget keeps total search ≈ 3.5 s on a 2-core box.
 
 import type { BoardState } from "../board.ts";
 import { evaluateFast } from "./eval.ts";
 import { simulateMove } from "./medium.ts";
-import { rankedCandidates } from "./moveGen.ts";
+import { freePlacementCandidates, rankedCandidates, type Candidate } from "./moveGen.ts";
 import type { AiDecision, AiStrategy } from "./types.ts";
 
-const ROOT_BRANCHING = 10;
-const INNER_BRANCHING = 6;
-const TIME_BUDGET_MS = 2500;
+const ROOT_BRANCHING = 14;
+const INNER_BRANCHING = 8;
+const TIME_BUDGET_MS = 3500;
 
 export class HardAi implements AiStrategy {
 	readonly level = "hard" as const;
@@ -26,8 +30,8 @@ export class HardAi implements AiStrategy {
 		let bestMove: { x: number; y: number } | null = null;
 		let bestScore = -Infinity;
 
-		// Iterative deepening: take the depth-2 result, try depth-3 if time allows.
-		for (let depth = 2; depth <= 3; ++depth) {
+		// Iterative deepening 2 → 3 → 4. Higher max depth beats medium clearly.
+		for (let depth = 2; depth <= 4; ++depth) {
 			const result = searchRoot(board, playerIndex, opponent, depth, stoneStrength, start);
 			if (result.timedOut) break;
 			if (result.bestMove) {
@@ -44,6 +48,23 @@ export class HardAi implements AiStrategy {
 	}
 }
 
+function rootCandidates(board: BoardState, me: number, branching: number): Candidate[] {
+	// Combine snap-grid + free-placement (off-grid + surround + wedge),
+	// dedupe by quantized position, sort by quickPriorScore, take top-K.
+	const grid = rankedCandidates(board, me, branching);
+	const free = freePlacementCandidates(board, me, branching);
+	const seen = new Set<string>();
+	const merged: Candidate[] = [];
+	for (const c of [...grid, ...free]) {
+		const k = `${(c.position.x * 10) | 0},${(c.position.y * 10) | 0}`;
+		if (seen.has(k)) continue;
+		seen.add(k);
+		merged.push(c);
+	}
+	merged.sort((a, b) => b.priorScore - a.priorScore);
+	return merged.slice(0, branching);
+}
+
 function searchRoot(
 	board: BoardState,
 	me: number,
@@ -52,7 +73,7 @@ function searchRoot(
 	stoneStrength: number,
 	startTime: number,
 ): { bestMove: { x: number; y: number } | null; bestScore: number; timedOut: boolean } {
-	const candidates = rankedCandidates(board, me, ROOT_BRANCHING);
+	const candidates = rootCandidates(board, me, ROOT_BRANCHING);
 
 	let bestMove: { x: number; y: number } | null = null;
 	let bestScore = -Infinity;

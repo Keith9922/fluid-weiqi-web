@@ -8,8 +8,8 @@ export type AiLevel = "easy" | "medium" | "hard" | "hell";
 export const AI_LABELS: Record<AiLevel, { zh: string; persona: string; en: string }> = {
 	easy:   { zh: "简单", persona: "老宋", en: "Easy"   },
 	medium: { zh: "中级", persona: "老王", en: "Medium" },
-	hard:   { zh: "困难", persona: "老李", en: "Hard"   },
-	hell:   { zh: "地狱", persona: "老黑", en: "Hell"   },
+	hard:   { zh: "困难", persona: "牢张", en: "Hard"   },
+	hell:   { zh: "地狱", persona: "牢鹰", en: "Hell"   },
 };
 
 // The AI returns either a place action or a pass.

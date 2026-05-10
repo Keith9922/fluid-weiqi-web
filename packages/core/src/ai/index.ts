@@ -8,7 +8,7 @@ import type { AiLevel, AiStrategy } from "./types.ts";
 
 export * from "./types.ts";
 export { evaluateBoard, evaluateFast } from "./eval.ts";
-export { gridCandidates, rankedCandidates, isFullyLegal } from "./moveGen.ts";
+export { gridCandidates, rankedCandidates, freePlacementCandidates, isFullyLegal } from "./moveGen.ts";
 
 export function createAi(level: AiLevel): AiStrategy {
 	switch (level) {

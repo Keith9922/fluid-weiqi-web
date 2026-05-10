@@ -682,13 +682,25 @@ input:focus {
 	box-shadow: var(--shadow-lg), inset 0 0 0 1px rgba(255,255,255,0.06);
 	background: #2a221a;
 	border: 1px solid var(--line);
+	box-sizing: border-box;
+	flex-shrink: 0;
 
-	/* Always a square. Width caps at 640px (desktop) or the available rail
-	   width on mobile; height is derived from width via aspect-ratio so the
-	   board can never be rectangular regardless of inline styles. */
+	/* Square board, three layers of defense (some Android Chromium-based
+	   browsers — Huawei included — have been observed ignoring aspect-ratio
+	   inside a flex column even with height: auto):
+	     1. width capped at 640px or container width
+	     2. aspect-ratio: 1/1 in modern engines
+	     3. padding-bottom hack as a fallback (% references parent width,
+	        which equals our width via the same min()) */
 	width: min(640px, 100%);
 	aspect-ratio: 1 / 1;
 	height: auto;
+}
+@supports not (aspect-ratio: 1 / 1) {
+	.game-board {
+		height: 0;
+		padding-bottom: min(640px, 100%);
+	}
 }
 /* All canvases fill the board container so the responsive width applies
    uniformly to background, overlay, preview, and input layers.

@@ -15,16 +15,16 @@
 import type { BoardState } from "../board.ts";
 import { evaluateFast } from "./eval.ts";
 import { simulateMove } from "./medium.ts";
-import { quickPriorScore, rankedCandidates } from "./moveGen.ts";
+import { freePlacementCandidates, quickPriorScore, rankedCandidates, type Candidate } from "./moveGen.ts";
 import type { AiDecision, AiStrategy } from "./types.ts";
 
-const TIME_BUDGET_MS = 8000;
-const MAX_SIMULATIONS = 4000;
-const ROOT_BRANCHING = 14;
-const INNER_BRANCHING = 8;
-const ROLLOUT_PLIES = 10;
-const ROLLOUT_CANDIDATES = 3;
-const C_PUCT = 1.4;
+const TIME_BUDGET_MS = 12000;     // up from 8s — Hell should genuinely intimidate
+const MAX_SIMULATIONS = 8000;     // up from 4000
+const ROOT_BRANCHING = 22;        // up from 14 — more breadth at root
+const INNER_BRANCHING = 10;       // up from 8
+const ROLLOUT_PLIES = 12;         // up from 10
+const ROLLOUT_CANDIDATES = 4;     // up from 3
+const C_PUCT = 1.5;
 
 type Node = {
 	board: BoardState;
@@ -101,10 +101,28 @@ export class HellAi implements AiStrategy {
 	}
 }
 
+function mergedCandidates(board: BoardState, me: number, branching: number): Candidate[] {
+	// Hell goes wider than Hard — combines snap-grid + free-placement and
+	// keeps the top-K. The wedge / surround spots from freePlacementCandidates
+	// are often the killing moves in Fluid Weiqi.
+	const grid = rankedCandidates(board, me, branching);
+	const free = freePlacementCandidates(board, me, branching);
+	const seen = new Set<string>();
+	const merged: Candidate[] = [];
+	for (const c of [...grid, ...free]) {
+		const k = `${(c.position.x * 10) | 0},${(c.position.y * 10) | 0}`;
+		if (seen.has(k)) continue;
+		seen.add(k);
+		merged.push(c);
+	}
+	merged.sort((a, b) => b.priorScore - a.priorScore);
+	return merged.slice(0, branching);
+}
+
 function expand(node: Node, branching: number, _me: number, _opp: number, stoneStrength: number): void {
 	if (node.children !== null) return;
 
-	const candidates = rankedCandidates(node.board, node.playerToMove, branching);
+	const candidates = mergedCandidates(node.board, node.playerToMove, branching);
 	const children: Node[] = [];
 
 	// Softmax-ish prior: higher quick scores → larger prior probability.

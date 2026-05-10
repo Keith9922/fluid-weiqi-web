@@ -3,6 +3,7 @@
 
 import { BoardState, DEFAULT_BOARD_CONFIG, type BoardConfig } from "./board.ts";
 import { buildAnalysis, findCapturedStones, isSuicide } from "./capture.ts";
+import { territoryOwnerAt } from "./influence.ts";
 import type { GameConfig } from "./protocol.ts";
 import type {
 	EndReason,
@@ -134,15 +135,21 @@ export class Match {
 
 		if (!this.board.withinBounds(position)) return reject("out of bounds");
 
-		// Reject "stacking" — disallow placing right on top of an existing stone
-		// (matches the "occupied-point blocking" rule in the original test build).
-		const minDist = 0.05; // sub-grid cell, matches preview snap visual spacing
-		for (const s of this.board.allStones()) {
-			const dx = s.position.x - position.x;
-			const dy = s.position.y - position.y;
-			if (dx * dx + dy * dy < minDist * minDist)
-				return reject("position is occupied");
-		}
+		// Match upstream BoardUtility.IsOccupiedAtAbsolutePosition exactly:
+		// the cell is "occupied" iff the territory analysis says it already
+		// has an owner (total influence >= 1). This blocks:
+		//   - placing on top of an existing stone (its blob owns the cell)
+		//   - placing inside enemy territory
+		//   - placing inside ANY blob, friend or foe
+		// The previous tiny-distance check (0.05) was wrong: with free
+		// placement, you could put two stones at (4, 4) and (4.1, 4) and both
+		// would land, visually stacking inside the same blob.
+		const owner = territoryOwnerAt(
+			position,
+			this.board.stones,
+			this.board.stoneHardness,
+		);
+		if (owner >= 0) return reject("position is occupied");
 
 		// Tentatively add the stone. If the placement turns out to be suicide
 		// (and captures nothing), roll back.
