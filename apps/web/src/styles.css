@@ -682,8 +682,13 @@ input:focus {
 	box-shadow: var(--shadow-lg), inset 0 0 0 1px rgba(255,255,255,0.06);
 	background: #2a221a;
 	border: 1px solid var(--line);
-	max-width: 100%;
+
+	/* Always a square. Width caps at 640px (desktop) or the available rail
+	   width on mobile; height is derived from width via aspect-ratio so the
+	   board can never be rectangular regardless of inline styles. */
+	width: min(640px, 100%);
 	aspect-ratio: 1 / 1;
+	height: auto;
 }
 /* All canvases fill the board container so the responsive width applies
    uniformly to background, overlay, preview, and input layers.

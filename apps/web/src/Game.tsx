@@ -350,7 +350,7 @@ export function Game(props: GameProps) {
 
 				{rejection && <div className="banner banner-error">{rejection}</div>}
 
-				<div className="game-board" style={{ width: BOARD_PX, height: BOARD_PX }}>
+				<div className="game-board">
 					<canvas ref={fluidRef} className="fluid" />
 					<canvas ref={overlayRef} className="overlay" />
 					<canvas ref={previewRef} className="preview" />
@@ -359,7 +359,6 @@ export function Game(props: GameProps) {
 						className="input"
 						width={BOARD_PX}
 						height={BOARD_PX}
-						style={{ width: BOARD_PX, height: BOARD_PX }}
 						onPointerDown={handlePointerDown}
 						onPointerMove={handlePointerMove}
 						onPointerUp={handlePointerUp}
