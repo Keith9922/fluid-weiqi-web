@@ -150,11 +150,34 @@ export function Game(props: GameProps) {
 		const rect = canvas.getBoundingClientRect();
 		const px = ((clientX - rect.left) / rect.width) * BOARD_PX;
 		const py = ((clientY - rect.top) / rect.height) * BOARD_PX;
-		return r.pxToBoard({ x: px, y: py });
+		const raw = r.pxToBoard({ x: px, y: py });
+		// Clamp finger / cursor coords to the playable area. On mobile,
+		// the outermost ring (cells right at the edge) is very thin —
+		// fingertips routinely land on the wood frame just outside the
+		// playable area when aiming at edge intersections. Clamping pulls
+		// those near-misses back onto the edge so the user CAN play the
+		// outermost ring like in traditional Go.
+		const minX = board.shrinkMargin;
+		const maxX = board.size - board.shrinkMargin;
+		const minY = board.shrinkMargin;
+		const maxY = board.size - board.shrinkMargin;
+		return {
+			x: Math.max(minX, Math.min(maxX, raw.x)),
+			y: Math.max(minY, Math.min(maxY, raw.y)),
+		};
 	}
 
 	function snapPoint(p: Vec2): Vec2 {
-		return { x: Math.round(p.x), y: Math.round(p.y) };
+		// Round to nearest integer, then re-clamp (round may push back to
+		// size when input is size-0.4).
+		const minX = board.shrinkMargin;
+		const maxX = board.size - board.shrinkMargin;
+		const minY = board.shrinkMargin;
+		const maxY = board.size - board.shrinkMargin;
+		return {
+			x: Math.max(minX, Math.min(maxX, Math.round(p.x))),
+			y: Math.max(minY, Math.min(maxY, Math.round(p.y))),
+		};
 	}
 
 	function placeAt(point: Vec2): void {
