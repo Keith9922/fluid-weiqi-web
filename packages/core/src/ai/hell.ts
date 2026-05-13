@@ -189,9 +189,13 @@ function rollout(
 		// stronger than uniform random.
 		let bestMove: { x: number; y: number } | null = null;
 		let bestScore = -Infinity;
+		// Sample free-placement floats in [0, size-1]; the rightmost line lives
+		// at coord size-1 in the new model. The simulateMove call below clamps
+		// + bounds-checks.
+		const maxCoord = board.size - 1;
 		for (let i = 0; i < ROLLOUT_CANDIDATES; ++i) {
-			const x = randInt(0, board.size);
-			const y = randInt(0, board.size);
+			const x = randInt(0, maxCoord);
+			const y = randInt(0, maxCoord);
 			const s = quickPriorScore(board, toMove, { x, y });
 			if (s > bestScore) {
 				bestScore = s;

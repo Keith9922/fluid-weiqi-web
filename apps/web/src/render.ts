@@ -172,8 +172,9 @@ export function layout(pixelSize: number, board: BoardSnapshot): {
 } {
 	const pad = pixelSize * PADDING_RATIO;
 	const playable = pixelSize - 2 * pad;
+	// Playable area in board coords is [shrinkMargin, size-1-shrinkMargin].
 	const min = board.shrinkMargin;
-	const max = board.size - board.shrinkMargin;
+	const max = board.size - 1 - board.shrinkMargin;
 	const span = Math.max(0.0001, max - min);
 	return {
 		boardToPx: p => ({
@@ -213,17 +214,19 @@ function drawGrid(
 	board: BoardSnapshot,
 	boardToPx: (p: Vec2) => Vec2,
 ): void {
-	const lines = Math.floor(board.size) + 1;
+	// Lines live at integer coords 0..size-1, giving a true N-line board.
+	const lines = Math.floor(board.size);
+	const lastIdx = lines - 1;
 	ctx.strokeStyle = "rgba(20, 14, 8, 0.38)";
 	ctx.lineWidth = 1;
 	ctx.beginPath();
 	for (let i = 0; i < lines; ++i) {
 		const a = boardToPx({ x: i, y: 0 });
-		const b = boardToPx({ x: i, y: board.size });
+		const b = boardToPx({ x: i, y: lastIdx });
 		ctx.moveTo(a.x + 0.5, a.y);
 		ctx.lineTo(b.x + 0.5, b.y);
 		const c = boardToPx({ x: 0, y: i });
-		const d = boardToPx({ x: board.size, y: i });
+		const d = boardToPx({ x: lastIdx, y: i });
 		ctx.moveTo(c.x, c.y + 0.5);
 		ctx.lineTo(d.x, d.y + 0.5);
 	}

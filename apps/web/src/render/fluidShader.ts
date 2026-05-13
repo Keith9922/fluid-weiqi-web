@@ -278,8 +278,9 @@ export class FluidRenderer {
 		gl.uniform1f(this.uniforms.hardness!, board.stoneHardness);
 		gl.uniform1f(this.uniforms.minX!, board.shrinkMargin);
 		gl.uniform1f(this.uniforms.minY!, board.shrinkMargin);
-		gl.uniform1f(this.uniforms.maxX!, board.size - board.shrinkMargin);
-		gl.uniform1f(this.uniforms.maxY!, board.size - board.shrinkMargin);
+		// Playable max coord is size-1-shrinkMargin (intersections at 0..size-1).
+		gl.uniform1f(this.uniforms.maxX!, board.size - 1 - board.shrinkMargin);
+		gl.uniform1f(this.uniforms.maxY!, board.size - 1 - board.shrinkMargin);
 		gl.uniform1f(this.uniforms.padRatio!, padRatio);
 		gl.uniform1i(this.uniforms.stoneCount!, count);
 		gl.uniform1i(this.uniforms.stones!, 0);

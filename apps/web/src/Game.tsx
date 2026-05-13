@@ -163,9 +163,9 @@ export function Game(props: GameProps) {
 		// those near-misses back onto the edge so the user CAN play the
 		// outermost ring like in traditional Go.
 		const minX = board.shrinkMargin;
-		const maxX = board.size - board.shrinkMargin;
+		const maxX = board.size - 1 - board.shrinkMargin;
 		const minY = board.shrinkMargin;
-		const maxY = board.size - board.shrinkMargin;
+		const maxY = board.size - 1 - board.shrinkMargin;
 		return {
 			x: Math.max(minX, Math.min(maxX, raw.x)),
 			y: Math.max(minY, Math.min(maxY, raw.y)),
@@ -176,9 +176,9 @@ export function Game(props: GameProps) {
 		// Round to nearest integer, then re-clamp (round may push back to
 		// size when input is size-0.4).
 		const minX = board.shrinkMargin;
-		const maxX = board.size - board.shrinkMargin;
+		const maxX = board.size - 1 - board.shrinkMargin;
 		const minY = board.shrinkMargin;
-		const maxY = board.size - board.shrinkMargin;
+		const maxY = board.size - 1 - board.shrinkMargin;
 		return {
 			x: Math.max(minX, Math.min(maxX, Math.round(p.x))),
 			y: Math.max(minY, Math.min(maxY, Math.round(p.y))),
@@ -587,11 +587,10 @@ function GameMeta({
 }
 
 function inBounds(p: Vec2, board: { size: number; shrinkMargin: number }): boolean {
+	const max = board.size - 1 - board.shrinkMargin;
 	return (
-		p.x >= board.shrinkMargin &&
-		p.x <= board.size - board.shrinkMargin &&
-		p.y >= board.shrinkMargin &&
-		p.y <= board.size - board.shrinkMargin
+		p.x >= board.shrinkMargin && p.x <= max &&
+		p.y >= board.shrinkMargin && p.y <= max
 	);
 }
 

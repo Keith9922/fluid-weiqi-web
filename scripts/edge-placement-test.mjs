@@ -28,11 +28,15 @@ function tryPlace(m, player, x, y) {
 	});
 }
 
-console.log("\n=== try every position on the 4 edges of an empty 13x13 ===");
+// New model: a size-N board has intersections at integer coords 0..N-1.
+// Edges are at coord 0 and coord N-1.
+const EDGE_MIN = 0;
+const EDGE_MAX = N - 1;
+console.log(`\n=== try every position on the 4 edges of an empty ${N}x${N} ===`);
 let totalEdge = 0, accepted = 0;
 const edgeCases = [];
-for (let i = 0; i <= N; ++i) {
-	for (const [x, y] of [[i, 0], [i, N], [0, i], [N, i]]) {
+for (let i = EDGE_MIN; i <= EDGE_MAX; ++i) {
+	for (const [x, y] of [[i, EDGE_MIN], [i, EDGE_MAX], [EDGE_MIN, i], [EDGE_MAX, i]]) {
 		totalEdge++;
 		const m = freshMatch();
 		const res = tryPlace(m, 0, x, y);
@@ -52,11 +56,24 @@ if (edgeCases.length) {
 ok("ALL edge positions accepted on empty board", edgeCases.length === 0);
 
 console.log("\n=== try corner positions specifically ===");
-for (const [x, y] of [[0, 0], [0, N], [N, 0], [N, N]]) {
+for (const [x, y] of [
+	[EDGE_MIN, EDGE_MIN],
+	[EDGE_MIN, EDGE_MAX],
+	[EDGE_MAX, EDGE_MIN],
+	[EDGE_MAX, EDGE_MAX],
+]) {
 	const m = freshMatch();
 	const res = tryPlace(m, 0, x, y);
 	ok(`(${x}, ${y}) accepted`, res.accepted);
 	if (!res.accepted) console.log(`    reason: ${res.reason}`);
+}
+
+console.log("\n=== a stone past the new max edge should be REJECTED ===");
+{
+	const m = freshMatch();
+	const res = tryPlace(m, 0, N, 5);    // coord = N (= EDGE_MAX + 1) is out of bounds
+	ok(`(${N}, 5) rejected`, !res.accepted);
+	if (res.accepted) console.log("    WARN: placement at coord=N should be out of bounds in new model");
 }
 
 console.log("\n=== place a stone at (5,5), then try (0,5) — adjacent to playable edge ===");

@@ -62,7 +62,8 @@ export function quickPriorScore(
 	playerIndex: number,
 	point: Vec2,
 ): number {
-	const center = board.size / 2;
+	// True center on a size-N board (intersections 0..N-1) is at (N-1)/2.
+	const center = (board.size - 1) / 2;
 	const dCenter = Math.hypot(point.x - center, point.y - center);
 	const centralBonus = -dCenter / board.size;
 

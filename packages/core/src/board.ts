@@ -5,7 +5,7 @@ import type { BoardSnapshot, StonePlacement, Vec2 } from "./types.ts";
 
 export type BoardConfig = {
 	playerCount: number;
-	size: number;             // intersections per side; the playable area is [0, size]
+	size: number;             // intersections per side; placeable integer coords are 0..size-1
 	stoneHardness: number;    // [0, 0.9999]; sharper falloff as it approaches 1
 	defaultStrength: number;  // strength assigned to each new stone
 };
@@ -64,12 +64,18 @@ export class BoardState {
 	}
 
 	// Min and max coordinates of the playable area (after shrinkage).
+	// For a standard size-N board, the N intersections per side live at integer
+	// coords 0..N-1; playableMax therefore returns size-1 (not size). Continuous
+	// off-grid placements are allowed anywhere in [min, max].
 	get playableMin(): Vec2 {
 		return { x: this.shrinkMargin, y: this.shrinkMargin };
 	}
 
 	get playableMax(): Vec2 {
-		return { x: this.size - this.shrinkMargin, y: this.size - this.shrinkMargin };
+		return {
+			x: this.size - 1 - this.shrinkMargin,
+			y: this.size - 1 - this.shrinkMargin,
+		};
 	}
 
 	withinBounds(p: Vec2): boolean {
