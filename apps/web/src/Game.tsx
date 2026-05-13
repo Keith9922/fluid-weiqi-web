@@ -80,7 +80,8 @@ export function Game(props: GameProps) {
 	const [shiftHeld, setShiftHeld] = useState(false);
 	const [touchDragging, setTouchDragging] = useState(false);
 	const [touchLoupePx, setTouchLoupePx] = useState<{ x: number; y: number } | null>(null);
-	const [showTutorial, setShowTutorial] = useState(() => shouldShowTutorial());
+	// Spectators never see the tutorial — it teaches placement, which they can't do.
+	const [showTutorial, setShowTutorial] = useState(() => shouldShowTutorial() && myPlayerIndex >= 0);
 	const [confirmResign, setConfirmResign] = useState(false);
 	const [winModalDismissed, setWinModalDismissed] = useState(false);
 	const touchStateRef = useRef<{
@@ -91,7 +92,11 @@ export function Game(props: GameProps) {
 		dragMode: boolean;
 		dragTimer: number | null;
 	} | null>(null);
-	const myTurn = matchStarted && !flow.isEnded && flow.currentPlayerIndex === myPlayerIndex;
+	const isSpectator = myPlayerIndex < 0;
+	const myTurn = !isSpectator
+		&& matchStarted
+		&& !flow.isEnded
+		&& flow.currentPlayerIndex === myPlayerIndex;
 
 	useEffect(() => {
 		if (!fluidRef.current || !overlayRef.current || !previewRef.current) return;
@@ -359,7 +364,8 @@ export function Game(props: GameProps) {
 		if (flow.winnerIndex === null) return "draw";
 		return flow.winnerIndex === myPlayerIndex ? "win" : "loss";
 	})();
-	const showWinModal = winOutcome !== null && !winModalDismissed;
+	// Spectators don't get the win/loss reveal (it'd be weirdly personal).
+	const showWinModal = !isSpectator && winOutcome !== null && !winModalDismissed;
 	const myFinalScore = flow.finalScore?.find(s => s.player === myPlayerIndex);
 	const oppFinalScore = flow.finalScore?.find(s => s.player !== myPlayerIndex);
 
@@ -387,9 +393,23 @@ export function Game(props: GameProps) {
 			</div>
 
 			<div className="game-stage">
-				{!matchStarted && !players.some(p => p.isAi) && (
+				{isSpectator && (
+					<div className="banner banner-info spectator-banner">
+						你正在观战 · 仅可查看，无法落子
+					</div>
+				)}
+				{!isSpectator && !matchStarted && !players.some(p => p.isAi) && (
 					<div className="banner banner-info">
 						等另一位玩家加入。把房间码 <kbd>{roomCode}</kbd> 发给对手。
+					</div>
+				)}
+				{isSpectator && flow.isEnded && (
+					<div className="banner banner-info">
+						对局已结束 ·{" "}
+						{flow.winnerIndex === null
+							? "和棋"
+							: `${players[flow.winnerIndex]?.name ?? `玩家${flow.winnerIndex + 1}`} 胜`}
+						{flow.endReason === "resign" && "（对手认输）"}
 					</div>
 				)}
 
@@ -431,24 +451,35 @@ export function Game(props: GameProps) {
 				/>
 
 				<div className="game-controls">
-					<button className="btn secondary" onClick={handlePass} disabled={!myTurn}>
-						Pass · 跳过
-					</button>
-					<button
-						className="btn ghost resign-btn"
-						onClick={() => setConfirmResign(true)}
-						disabled={flow.isEnded || !matchStarted}
-					>
-						投子认输
-					</button>
-					<button className="btn ghost" onClick={onLeave}>
-						离开房间
-					</button>
-					<span className="game-controls-hint">
-						{detectDevice() === "touch"
-							? "轻点落子（吸附） · 按住拖动 = 自由落子"
-							: <>左键落子（吸附） · 按住 <kbd>Shift</kbd> 自由落子</>}
-					</span>
+					{isSpectator ? (
+						<>
+							<button className="btn ghost" onClick={onLeave}>
+								退出观战
+							</button>
+							<span className="game-controls-hint">观战模式下不会显示落子预览</span>
+						</>
+					) : (
+						<>
+							<button className="btn secondary" onClick={handlePass} disabled={!myTurn}>
+								Pass · 跳过
+							</button>
+							<button
+								className="btn ghost resign-btn"
+								onClick={() => setConfirmResign(true)}
+								disabled={flow.isEnded || !matchStarted}
+							>
+								投子认输
+							</button>
+							<button className="btn ghost" onClick={onLeave}>
+								离开房间
+							</button>
+							<span className="game-controls-hint">
+								{detectDevice() === "touch"
+									? "轻点落子（吸附） · 按住拖动 = 自由落子"
+									: <>左键落子（吸附） · 按住 <kbd>Shift</kbd> 自由落子</>}
+							</span>
+						</>
+					)}
 				</div>
 			</div>
 

@@ -18,12 +18,26 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
 	stoneStrength: 1.0,
 };
 
+// Room visibility — public rooms appear in the live lounge; private rooms
+// require the host to share the room code out-of-band (legacy flow).
+export type RoomVisibility = "public" | "private";
+
+// Lifecycle of a room from the lounge's perspective.
+//   waiting — created, waiting for a second player (PvP) or AI to seat
+//   playing — match in progress
+//   ended   — match concluded; room may still be open for review but no new
+//             players will be accepted
+export type RoomLifecycleStage = "waiting" | "playing" | "ended";
+
 // ---- Client -> Server ----------------------------------------------------
 
 export type ClientCreateRoom = {
 	t: "createRoom";
 	playerName: string;
 	gameConfig?: GameConfig;
+	// New (optional for backward compat):
+	roomName?: string;          // display name; defaults to "{playerName} 的房间"
+	visibility?: RoomVisibility; // default "public" — appears in the lounge list
 };
 
 export type ClientCreateAiRoom = {
@@ -51,12 +65,35 @@ export type ClientLeaveRoom = {
 	roomCode: string;
 };
 
+// Subscribe to live lounge updates. Server replies with a `loungeSnapshot`,
+// then streams `loungeRoomUpdate` events until the client unsubscribes or
+// disconnects.
+export type ClientSubscribeLounge = {
+	t: "subscribeLounge";
+};
+
+export type ClientUnsubscribeLounge = {
+	t: "unsubscribeLounge";
+};
+
+// Join a room as a spectator. Spectator sees the full board state including
+// the territory bar but cannot place / pass / resign. `yourPlayerIndex` in
+// the resulting roomState is -1.
+export type ClientSpectateRoom = {
+	t: "spectateRoom";
+	roomCode: string;
+	viewerName?: string;    // optional; defaults to "观众"
+};
+
 export type ClientMessage =
 	| ClientCreateRoom
 	| ClientCreateAiRoom
 	| ClientJoinRoom
 	| ClientAction
-	| ClientLeaveRoom;
+	| ClientLeaveRoom
+	| ClientSubscribeLounge
+	| ClientUnsubscribeLounge
+	| ClientSpectateRoom;
 
 // ---- Server -> Client ----------------------------------------------------
 
@@ -76,6 +113,11 @@ export type ServerRoomState = {
 	matchStarted: boolean;
 	snapshot: MatchSnapshot | null;
 	gameConfig: GameConfig;
+	// Optional metadata used by the lounge/spectator UI. Older clients ignore.
+	roomName?: string;
+	visibility?: RoomVisibility;
+	stage?: RoomLifecycleStage;
+	spectatorCount?: number;
 };
 
 export type ServerAiThinking = {
@@ -100,9 +142,47 @@ export type ServerError = {
 	reason: string;
 };
 
+// Public-facing summary of a room, sent to lounge subscribers.
+export type LoungeRoomSummary = {
+	roomCode: string;
+	roomName: string;
+	visibility: RoomVisibility;
+	stage: RoomLifecycleStage;
+	players: {
+		name: string;
+		playerIndex: number;
+		isAi: boolean;
+		aiLevel?: AiLevel;
+		connected: boolean;
+	}[];
+	playerCount: number;        // currently seated (excludes empty slots)
+	capacity: number;           // total seats (2 for now)
+	spectatorCount: number;
+	boardSize: number;
+	createdAt: number;          // unix ms
+};
+
+// Initial dump of all public rooms after `subscribeLounge`.
+export type ServerLoungeSnapshot = {
+	t: "loungeSnapshot";
+	rooms: LoungeRoomSummary[];
+	serverTime: number;         // unix ms, so clients can render "x 秒前"
+};
+
+// Incremental update: a public room was added, updated, or removed/closed.
+// For "removed", the `summary` field is omitted.
+export type ServerLoungeRoomUpdate = {
+	t: "loungeRoomUpdate";
+	kind: "added" | "updated" | "removed";
+	roomCode: string;
+	summary?: LoungeRoomSummary;
+};
+
 export type ServerMessage =
 	| ServerRoomState
 	| ServerActionAccepted
 	| ServerActionRejected
 	| ServerAiThinking
-	| ServerError;
+	| ServerError
+	| ServerLoungeSnapshot
+	| ServerLoungeRoomUpdate;

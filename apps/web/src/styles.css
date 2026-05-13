@@ -1130,6 +1130,188 @@ input:focus {
 	margin-left: 0.5rem;
 }
 
+/* ====================================================================
+   Lounge (直播间) — live battle list and create-room dialog.
+   ==================================================================== */
+
+.tab-badge {
+	display: inline-block;
+	margin-left: 0.45rem;
+	min-width: 1.4em;
+	padding: 0 0.4em;
+	background: var(--accent);
+	color: var(--bg-deep);
+	border-radius: 999px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	line-height: 1.5;
+	font-family: ui-sans-serif, system-ui, sans-serif;
+	vertical-align: middle;
+}
+
+.lounge-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 0.9rem;
+}
+
+.lounge-toolbar {
+	display: flex;
+	gap: 0.6rem;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.lounge-private-toggle {
+	font-size: 0.85rem;
+}
+
+.lounge-join-by-code {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+	padding: 0.6rem 0.7rem;
+	background: var(--bg-deep);
+	border: 1px dashed var(--line);
+	border-radius: var(--radius-sm);
+}
+.lounge-join-by-code .code-input {
+	flex: 1;
+	min-width: 0;
+}
+
+.lounge-loading,
+.lounge-empty {
+	padding: 1.6rem 1rem;
+	text-align: center;
+	color: var(--ink-mute);
+	background: var(--bg-deep);
+	border: 1px dashed var(--line);
+	border-radius: var(--radius);
+	font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.lounge-empty p { margin: 0; }
+.lounge-empty p + p { margin-top: 0.3rem; font-size: 0.88rem; }
+
+.lounge-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.55rem;
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.lounge-room {
+	background: var(--bg-deep);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 0.7rem 0.85rem;
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 0.35rem 0.7rem;
+	align-items: center;
+}
+.lounge-room.stage-ended {
+	opacity: 0.72;
+}
+.lounge-room-head {
+	grid-column: 1 / 2;
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	min-width: 0;
+}
+.lounge-room-name {
+	font-weight: 600;
+	color: var(--ink);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lounge-stage-badge {
+	font-size: 0.72rem;
+	font-family: ui-sans-serif, system-ui, sans-serif;
+	font-weight: 600;
+	padding: 0.1em 0.55em;
+	border-radius: 999px;
+	border: 1px solid currentColor;
+	white-space: nowrap;
+}
+.lounge-stage-badge.stage-waiting { color: var(--accent); }
+.lounge-stage-badge.stage-playing { color: #7eb87d; }
+.lounge-stage-badge.stage-ended   { color: var(--ink-mute); }
+
+.lounge-room-meta {
+	grid-column: 1 / 2;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem;
+	font-size: 0.82rem;
+	color: var(--ink-mute);
+	font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.lounge-room-players {
+	grid-column: 1 / 2;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.7rem;
+	font-size: 0.86rem;
+}
+.lounge-player {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+.lounge-player-dot {
+	width: 0.62em;
+	height: 0.62em;
+	border-radius: 50%;
+	background: #444;
+	border: 1px solid var(--line);
+}
+.lounge-player.p0 .lounge-player-dot { background: #1a1a1a; }
+.lounge-player.p1 .lounge-player-dot { background: #f4ece0; }
+
+.lounge-room-actions {
+	grid-column: 2 / 3;
+	grid-row: 1 / 4;
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	align-items: stretch;
+	justify-content: center;
+}
+
+.btn.small {
+	padding: 0.35rem 0.85rem;
+	font-size: 0.85rem;
+}
+
+.lounge-create-card {
+	width: min(440px, 92vw);
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+}
+.lounge-create-card .field { gap: 0.35rem; }
+
+.spectator-banner {
+	font-family: ui-sans-serif, system-ui, sans-serif;
+	font-weight: 500;
+}
+
+@media (max-width: 520px) {
+	.lounge-room {
+		grid-template-columns: 1fr;
+	}
+	.lounge-room-actions {
+		grid-column: 1 / 2;
+		grid-row: auto;
+		flex-direction: row;
+		justify-content: flex-end;
+	}
+}
+
 /* Misc */
 kbd {
 	background: var(--bg-elev-2);

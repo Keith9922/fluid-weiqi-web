@@ -15,6 +15,7 @@ import {
 	type ServerActionAccepted,
 	type ServerActionRejected,
 	type ServerError,
+	type ServerLoungeSnapshot,
 	type ServerRoomState,
 } from "@fluid/core";
 import { Room, RoomStore, type Connection } from "./room.ts";
@@ -56,13 +57,19 @@ function handleMessage(socket: WebSocket, raw: string): void {
 	switch (msg.t) {
 		case "createRoom": {
 			const config = sanitizeConfig(msg.gameConfig ?? DEFAULT_GAME_CONFIG);
-			const room = store.create(config);
-			joinHumanToRoom(socket, room, msg.playerName || "P1");
+			const playerName = (msg.playerName || "P1").slice(0, 24);
+			const room = store.create(config, {
+				name: sanitizeRoomName(msg.roomName, playerName),
+				visibility: msg.visibility === "private" ? "private" : "public",
+			});
+			joinHumanToRoom(socket, room, playerName);
+			store.publishRoomUpdate(room);
 			break;
 		}
 		case "createAiRoom": {
 			const config = sanitizeConfig(msg.gameConfig ?? DEFAULT_GAME_CONFIG);
-			const room = store.create(config);
+			// AI rooms are always private — they don't appear in the lounge.
+			const room = store.create(config, { visibility: "private" });
 			const humanFirst = msg.humanPlaysFirst !== false;
 			const humanSlot = humanFirst ? 0 : 1;
 			const aiSlot = 1 - humanSlot;
@@ -75,7 +82,24 @@ function handleMessage(socket: WebSocket, raw: string): void {
 		case "joinRoom": {
 			const room = store.get(msg.roomCode);
 			if (!room) return sendError(socket, `room ${msg.roomCode} not found`);
-			joinHumanToRoom(socket, room, msg.playerName || "P?");
+			joinHumanToRoom(socket, room, (msg.playerName || "P?").slice(0, 24));
+			store.publishRoomUpdate(room);
+			break;
+		}
+		case "spectateRoom": {
+			const room = store.get(msg.roomCode);
+			if (!room) return sendError(socket, `room ${msg.roomCode} not found`);
+			const name = (msg.viewerName || "观众").slice(0, 24);
+			const conn = room.addSpectator(socket, name);
+			connectionRoom.set(socket, { room, conn });
+			// Send the spectator a state snapshot so they see the current board.
+			safeSend(socket, buildRoomState(room, conn));
+			// Also notify in-room participants of the new spectator count.
+			for (const c of room.connections) {
+				if (c === conn) continue;
+				safeSend(c.socket, buildRoomState(room, c));
+			}
+			store.publishRoomUpdate(room);
 			break;
 		}
 		case "action": {
@@ -111,6 +135,8 @@ function handleMessage(socket: WebSocket, raw: string): void {
 
 			// If the next turn is an AI, kick off its computation.
 			maybeScheduleAi(room);
+			// Notify lounge of stage / score changes.
+			store.publishRoomUpdate(room);
 			break;
 		}
 		case "leaveRoom": {
@@ -120,19 +146,41 @@ function handleMessage(socket: WebSocket, raw: string): void {
 			room.removeConnection(conn);
 			connectionRoom.delete(socket);
 			room.broadcast(buildRoomState(room, conn));
-			if (room.connections.size === 0 && !room.hasAiPlayer) store.delete(room.code);
+			if (room.connections.size === 0 && !room.hasAiPlayer) {
+				store.delete(room.code);
+			} else {
+				store.publishRoomUpdate(room);
+			}
+			break;
+		}
+		case "subscribeLounge": {
+			const rooms = store.subscribeLounge(socket);
+			const snap: ServerLoungeSnapshot = {
+				t: "loungeSnapshot",
+				rooms,
+				serverTime: Date.now(),
+			};
+			safeSend(socket, snap);
+			break;
+		}
+		case "unsubscribeLounge": {
+			store.unsubscribeLounge(socket);
 			break;
 		}
 	}
 }
 
 function handleClose(socket: WebSocket): void {
+	// Always clear lounge subscription on disconnect.
+	store.unsubscribeLounge(socket);
+
 	const entry = connectionRoom.get(socket);
 	if (!entry) return;
 	const { room, conn } = entry;
 	room.removeConnection(conn);
 	connectionRoom.delete(socket);
-	if (room.connections.size === 0) {
+	const hasLiveHumans = [...room.connections].some(c => c.socket.readyState === c.socket.OPEN);
+	if (!hasLiveHumans) {
 		// Even AI-only rooms get cleaned up when the human leaves.
 		store.delete(room.code);
 		return;
@@ -140,6 +188,7 @@ function handleClose(socket: WebSocket): void {
 	for (const c of room.connections) {
 		safeSend(c.socket, buildRoomState(room, c));
 	}
+	store.publishRoomUpdate(room);
 }
 
 function joinHumanToRoom(
@@ -178,6 +227,10 @@ function buildRoomState(room: Room, viewer: Connection): ServerRoomState {
 		matchStarted: room.matchStarted,
 		snapshot: room.match.snapshot(),
 		gameConfig: room.gameConfig,
+		roomName: room.name,
+		visibility: room.visibility,
+		stage: room.stage,
+		spectatorCount: room.spectatorCount,
 	};
 }
 
@@ -192,6 +245,12 @@ function sanitizeConfig(c: GameConfig): GameConfig {
 	};
 }
 
+function sanitizeRoomName(name: string | undefined, fallbackOwner: string): string {
+	const raw = (name ?? "").trim();
+	if (raw.length === 0) return `${fallbackOwner} 的房间`;
+	return raw.slice(0, 32);
+}
+
 function countStones(room: Room): number {
 	return room.match.board.allStones().length;
 }
@@ -204,6 +263,17 @@ function sendError(socket: WebSocket, reason: string): void {
 	const err: ServerError = { t: "error", reason };
 	safeSend(socket, err);
 }
+
+// Periodically GC stale public waiting rooms so the lounge doesn't fill up
+// with abandoned codes.
+const SWEEP_INTERVAL_MS = 60_000;
+const STALE_WAIT_MS = 10 * 60_000;
+setInterval(() => {
+	const removed = store.sweepStaleRooms(STALE_WAIT_MS);
+	if (removed.length > 0) {
+		console.log(`[fluid-weiqi server] swept ${removed.length} stale waiting rooms: ${removed.join(", ")}`);
+	}
+}, SWEEP_INTERVAL_MS).unref();
 
 httpServer.listen(PORT, HOST, () => {
 	console.log(`[fluid-weiqi server] listening on http://${HOST}:${PORT}`);

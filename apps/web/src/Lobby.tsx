@@ -1,16 +1,34 @@
 import { useState } from "react";
-import { AI_LABELS, DEFAULT_GAME_CONFIG, type AiLevel, type GameConfig } from "@fluid/core";
+import {
+	AI_LABELS,
+	DEFAULT_GAME_CONFIG,
+	type AiLevel,
+	type GameConfig,
+	type LoungeRoomSummary,
+	type RoomVisibility,
+} from "@fluid/core";
 import { detectDevice } from "./device.ts";
+import { Lounge } from "./Lounge.tsx";
 
 export type LobbyProps = {
 	connecting: boolean;
 	error: string | null;
-	onCreateOnline: (name: string, config: GameConfig) => void;
+	onCreateOnline: (
+		name: string,
+		config: GameConfig,
+		opts?: { roomName?: string; visibility?: RoomVisibility },
+	) => void;
 	onJoin: (code: string, name: string) => void;
 	onCreateAi: (name: string, aiLevel: AiLevel, humanFirst: boolean, config: GameConfig) => void;
+	onSpectate: (code: string, name: string) => void;
+	// Lounge state lifted to App so the WS subscription survives tab toggles.
+	loungeRooms: LoungeRoomSummary[];
+	loungeSubscribed: boolean;
+	loungeServerTime: number | null;
+	onTabChange: (tab: Tab) => void;
 };
 
-type Tab = "online" | "ai";
+export type Tab = "ai" | "lounge";
 
 const BOARD_SIZES = [9, 13, 19] as const;
 const AI_LEVELS: AiLevel[] = ["easy", "medium", "hard", "hell"];
@@ -27,10 +45,14 @@ const AI_TAGLINE: Record<AiLevel, string> = {
 	hell:   "强敌",
 };
 
-export function Lobby({ connecting, error, onCreateOnline, onJoin, onCreateAi }: LobbyProps) {
-	const [tab, setTab] = useState<Tab>("ai");
+export function Lobby({
+	connecting, error,
+	onCreateOnline, onJoin, onCreateAi, onSpectate,
+	loungeRooms, loungeSubscribed, loungeServerTime, onTabChange,
+}: LobbyProps) {
+	const [tab, setTabInner] = useState<Tab>("ai");
+	const setTab = (t: Tab) => { setTabInner(t); onTabChange(t); };
 	const [name, setName] = useState(() => randomName());
-	const [code, setCode] = useState("");
 	const [aiLevel, setAiLevel] = useState<AiLevel>("medium");
 	const [humanFirst, setHumanFirst] = useState(true);
 	// On touch devices, recommend 13×13 by default — 19×19 cells would be
@@ -42,9 +64,7 @@ export function Lobby({ connecting, error, onCreateOnline, onJoin, onCreateAi }:
 	);
 
 	const trimmedName = name.trim();
-	const trimmedCode = code.trim().toUpperCase();
 	const canSubmit = !connecting && trimmedName.length > 0;
-	const canJoin = canSubmit && trimmedCode.length === 6;
 
 	return (
 		<div className="lobby">
@@ -63,7 +83,12 @@ export function Lobby({ connecting, error, onCreateOnline, onJoin, onCreateAi }:
 
 			<div className="tabs">
 				<button className={`tab${tab === "ai" ? " active" : ""}`} onClick={() => setTab("ai")}>vs AI</button>
-				<button className={`tab${tab === "online" ? " active" : ""}`} onClick={() => setTab("online")}>双人联机</button>
+				<button className={`tab${tab === "lounge" ? " active" : ""}`} onClick={() => setTab("lounge")}>
+					直播间
+					{loungeSubscribed && loungeRooms.length > 0 && (
+						<span className="tab-badge">{loungeRooms.length}</span>
+					)}
+				</button>
 			</div>
 
 			{tab === "ai" && (
@@ -103,36 +128,27 @@ export function Lobby({ connecting, error, onCreateOnline, onJoin, onCreateAi }:
 				</div>
 			)}
 
-			{tab === "online" && (
-				<div className="lobby-panel">
-					<GameConfigPanel config={config} onChange={setConfig} />
-					<button
-						className="btn primary"
-						disabled={!canSubmit}
-						onClick={() => onCreateOnline(trimmedName, config)}
-					>
-						创建房间
-					</button>
-
-					<div className="separator">或加入已有房间</div>
-
-					<div className="row">
-						<input
-							value={code}
-							onChange={e => setCode(e.target.value.toUpperCase().slice(0, 6))}
-							placeholder="6 位房间码"
-							className="code-input"
-						/>
-						<button
-							className="btn secondary"
-							disabled={!canJoin}
-							onClick={() => onJoin(trimmedCode, trimmedName)}
-						>
-							加入
-						</button>
-					</div>
-				</div>
+			{tab === "lounge" && (
+				<Lounge
+					rooms={loungeRooms}
+					subscribed={loungeSubscribed}
+					serverTime={loungeServerTime}
+					connecting={connecting || !canSubmit}
+					myName={trimmedName || "棋友"}
+					onCreateRoom={opts =>
+						onCreateOnline(trimmedName || "棋友", opts.gameConfig, {
+							roomName: opts.roomName,
+							visibility: opts.visibility,
+						})
+					}
+					onJoinAsPlayer={code => onJoin(code, trimmedName || "棋友")}
+					onSpectate={code => onSpectate(code, trimmedName || "观众")}
+					onJoinByCode={code => onJoin(code, trimmedName || "棋友")}
+				/>
 			)}
+
+			{/* The old "双人联机" tab is gone — both its create-room form and
+			    code-input join now live inside the Lounge ("直播间") tab. */}
 
 			{error && <div className="banner banner-error">{error}</div>}
 		</div>
