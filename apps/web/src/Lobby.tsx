@@ -84,7 +84,7 @@ export function Lobby({
 			<div className="tabs">
 				<button className={`tab${tab === "ai" ? " active" : ""}`} onClick={() => setTab("ai")}>vs AI</button>
 				<button className={`tab${tab === "lounge" ? " active" : ""}`} onClick={() => setTab("lounge")}>
-					直播间
+					棋室
 					{loungeSubscribed && loungeRooms.length > 0 && (
 						<span className="tab-badge">{loungeRooms.length}</span>
 					)}
@@ -148,7 +148,7 @@ export function Lobby({
 			)}
 
 			{/* The old "双人联机" tab is gone — both its create-room form and
-			    code-input join now live inside the Lounge ("直播间") tab. */}
+			    code-input join now live inside the Lounge ("棋室") tab. */}
 
 			{error && <div className="banner banner-error">{error}</div>}
 		</div>

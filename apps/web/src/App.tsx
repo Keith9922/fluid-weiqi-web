@@ -37,7 +37,7 @@ export function App() {
 	const [captureToast, setCaptureToast] = useState<{ id: number; count: number } | null>(null);
 	const [theme, setTheme] = useState<Theme>(() => getInitialTheme());
 
-	// Lounge state — kept across tab toggles so re-opening the 直播间 tab
+	// Lounge state — kept across tab toggles so re-opening the 棋室 tab
 	// doesn't blank out and re-fetch.
 	const [loungeRooms, setLoungeRooms] = useState<LoungeRoomSummary[]>([]);
 	const [loungeSubscribed, setLoungeSubscribed] = useState(false);

@@ -57,7 +57,7 @@ async function main() {
 	host.ws.send(JSON.stringify({
 		t: "createRoom",
 		playerName: "Host",
-		roomName: "我的直播间",
+		roomName: "我的棋室",
 		visibility: "public",
 	}));
 	const hostJoined = await waitFor(host.messages, m => m.t === "roomState");
@@ -65,13 +65,13 @@ async function main() {
 	console.log(`\n=== host created public room ${roomCode} ===`);
 	ok("host got roomState", hostJoined.t === "roomState");
 	ok("host's playerIndex is 0", hostJoined.yourPlayerIndex === 0);
-	ok("roomName plumbed back", hostJoined.roomName === "我的直播间");
+	ok("roomName plumbed back", hostJoined.roomName === "我的棋室");
 	ok("visibility plumbed back", hostJoined.visibility === "public");
 
 	const added = await waitFor(observer.messages, m =>
 		m.t === "loungeRoomUpdate" && m.kind === "added" && m.roomCode === roomCode);
 	ok("observer got loungeRoomUpdate(added)", !!added);
-	ok("summary has room name", added.summary?.roomName === "我的直播间");
+	ok("summary has room name", added.summary?.roomName === "我的棋室");
 	ok("summary stage is 'waiting'", added.summary?.stage === "waiting");
 
 	// --- Step 3: host creates a PRIVATE room — should NOT appear in lounge ---

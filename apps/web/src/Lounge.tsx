@@ -1,5 +1,5 @@
-// Live battle lounge — list of public rooms, with actions to spectate or
-// join. Sibling component of <Lobby> (rendered inside its "直播间" tab).
+// 棋室 (Go-rooms lounge) — list of public rooms, with actions to spectate
+// or join. Sibling component of <Lobby> (rendered inside its "棋室" tab).
 //
 // Subscription lifecycle is owned by <App> — this component is presentational
 // + dispatches callbacks. That keeps a single WS subscription regardless of
@@ -65,12 +65,12 @@ export function Lounge(props: LoungeProps) {
 					disabled={connecting}
 					onClick={() => setShowCreate(true)}
 				>
-					创建直播间
+					创建棋室
 				</button>
 				<button
 					className="btn ghost lounge-private-toggle"
 					onClick={() => setShowJoinByCode(v => !v)}
-					title="用 6 位房间码加入私密房间"
+					title="用 6 位房间码加入私密棋室"
 				>
 					{showJoinByCode ? "收起房间码" : "用房间码加入"}
 				</button>
@@ -95,13 +95,13 @@ export function Lounge(props: LoungeProps) {
 			)}
 
 			{!subscribed && (
-				<div className="lounge-loading">正在连接直播间…</div>
+				<div className="lounge-loading">正在加载棋室列表…</div>
 			)}
 
 			{subscribed && rooms.length === 0 && (
 				<div className="lounge-empty">
 					<p>暂时没有公开对局。</p>
-					<p className="muted">第一个开房间的就是你。</p>
+					<p className="muted">第一个开棋室的就是你。</p>
 				</div>
 			)}
 
@@ -122,7 +122,7 @@ export function Lounge(props: LoungeProps) {
 
 			{showCreate && (
 				<CreateRoomDialog
-					defaultName={`${myName} 的房间`}
+					defaultName={`${myName} 的棋室`}
 					onClose={() => setShowCreate(false)}
 					onSubmit={opts => {
 						setShowCreate(false);
@@ -240,10 +240,10 @@ function CreateRoomDialog(props: {
 	return (
 		<div className="confirm-backdrop" onClick={props.onClose}>
 			<div className="confirm-card lounge-create-card" onClick={e => e.stopPropagation()}>
-				<h4>创建对局</h4>
+				<h4>创建棋室</h4>
 
 				<div className="field">
-					<label htmlFor="room-name">房间名</label>
+					<label htmlFor="room-name">棋室名</label>
 					<input
 						id="room-name"
 						value={roomName}
@@ -260,7 +260,7 @@ function CreateRoomDialog(props: {
 							className={`seg-item${visibility === "public" ? " active" : ""}`}
 							onClick={() => setVisibility("public")}
 						>
-							公开 · 直播间可见
+							公开 · 棋室列表可见
 						</button>
 						<button
 							className={`seg-item${visibility === "private" ? " active" : ""}`}
@@ -271,8 +271,8 @@ function CreateRoomDialog(props: {
 					</div>
 					<div className="config-hint">
 						{visibility === "public"
-							? "其他玩家可以在直播间看到并加入或观战。"
-							: "房间不会出现在直播间。把房间码发给对手才能加入。"}
+							? "其他玩家可以在棋室列表里看到并加入或观战。"
+							: "棋室不会出现在列表。把房间码发给对手才能加入。"}
 					</div>
 				</div>
 

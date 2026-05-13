@@ -471,7 +471,7 @@ export function Game(props: GameProps) {
 								投子认输
 							</button>
 							<button className="btn ghost" onClick={onLeave}>
-								离开房间
+								离开棋室
 							</button>
 							<span className="game-controls-hint">
 								{detectDevice() === "touch"
@@ -525,7 +525,7 @@ function RoomBadge({ code }: { code: string }) {
 			}}
 			title="点击复制房间码"
 		>
-			<span className="room-badge-label">房间</span>
+			<span className="room-badge-label">棋室</span>
 			<span className="room-badge-code">{code}</span>
 			<span className="room-badge-action">{copied ? "已复制" : "复制"}</span>
 		</button>
