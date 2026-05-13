@@ -142,9 +142,19 @@ export function computeChainStats(grid: AnalysisGrid): Map<number, ChainStat> {
 }
 
 export function chainAt(grid: AnalysisGrid, point: Vec2): number {
-	const i = Math.floor((point.x - grid.originX) / grid.cellSize);
-	const j = Math.floor((point.y - grid.originY) / grid.cellSize);
-	if (i < 0 || j < 0 || i >= grid.resolution || j >= grid.resolution) return -1;
+	let i = Math.floor((point.x - grid.originX) / grid.cellSize);
+	let j = Math.floor((point.y - grid.originY) / grid.cellSize);
+	// Positions BEFORE the grid origin are outside the playable area — return
+	// -1 so the caller treats them as "no chain here".
+	if (i < 0 || j < 0) return -1;
+	// Positions exactly AT the max edge (x = playableMax) map to index =
+	// resolution, which is one past the last valid cell because the grid
+	// samples at (i + 0.5) * cellSize. Clamp to the last cell — the stone's
+	// blob is still inside the grid coverage even if its center is right on
+	// the boundary. Without this clamp, edge placements (e.g. corner of a
+	// 13×13 board) were incorrectly flagged as suicide.
+	if (i >= grid.resolution) i = grid.resolution - 1;
+	if (j >= grid.resolution) j = grid.resolution - 1;
 	return grid.chainId[j * grid.resolution + i] ?? -1;
 }
 
